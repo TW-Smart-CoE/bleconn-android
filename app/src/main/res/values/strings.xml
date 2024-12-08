@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">bleconn-android</string>
+    <string name="request_permission_screen_title" translatable="false">Permission Request</string>
+    <string name="denied_permissions_title" translatable="false">Denied Permissions:</string>
+    <string name="all_permission_granted" translatable="false">All permissions granted!</string>
+    <string name="request_permission_btn" translatable="false">Request Permissions</string>
+    <string name="ble_server" translatable="false">Ble Server</string>
+    <string name="ble_client" translatable="false">Ble Client</string>
+    <string name="ble_scanner" translatable="false">Ble Scanner</string>
+    <string name="start">start</string>
+    <string name="start_scan">start scan</string>
+    <string name="stop_scan">stop scan</string>
+    <string name="stop">stop</string>
+    <string name="write_wifi_config">Write WiFiConfig</string>
+</resources>
