@@ -7,8 +7,10 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import com.thoughtworks.bleconn.utils.CallbackHolder
 import com.thoughtworks.bleconn.utils.GattUtils.writeCharacteristicCompact
 import com.thoughtworks.bleconn.utils.TestUUID
 import com.thoughtworks.bleconn.utils.logger.DefaultLogger
@@ -27,7 +29,13 @@ class BleClient(
     private val logger: Logger = DefaultLogger(),
 ) {
     data class ConnectResult(
-        val connected: Boolean = false,
+        val isConnected: Boolean = false,
+        val errorMessage: String = "",
+    )
+
+    data class DiscoverServicesResult(
+        val isSuccess: Boolean = false,
+        val services: List<BluetoothGattService> = emptyList(),
         val errorMessage: String = "",
     )
 
@@ -36,7 +44,8 @@ class BleClient(
     private val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
     private var bluetoothGatt: BluetoothGatt? = null
 
-    private var connectCallback: ((ConnectResult) -> Unit)? = null
+    private var connectCallback = CallbackHolder<ConnectResult>()
+    private var discoverServicesCallback = CallbackHolder<DiscoverServicesResult>()
 
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
@@ -44,19 +53,11 @@ class BleClient(
             super.onConnectionStateChange(gatt, status, newState)
             if (newState == BluetoothGatt.STATE_CONNECTED) {
                 logger.debug(TAG, "Connected to GATT server.")
-                connectCallback?.invoke(ConnectResult(connected = true))
-                connectCallback = null
-//                bluetoothGatt?.discoverServices()
+                connectCallback.resolve(ConnectResult(isConnected = true))
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
                 val errorMessage = "Disconnected from GATT server."
                 logger.debug(TAG, errorMessage)
-                connectCallback?.invoke(
-                    ConnectResult(
-                        connected = false,
-                        errorMessage = errorMessage
-                    )
-                )
-                connectCallback = null
+                connectCallback.resolve(ConnectResult(errorMessage = errorMessage))
             }
         }
 
@@ -65,6 +66,12 @@ class BleClient(
             super.onServicesDiscovered(gatt, status)
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 logger.debug(TAG, "GATT services discovered.")
+                discoverServicesCallback.resolve(
+                    DiscoverServicesResult(
+                        isSuccess = true, services = gatt.services
+                    )
+                )
+
                 gatt.services.forEach {
                     logger.debug(TAG, "Service: ${it.uuid}")
                     it.characteristics.forEach {
@@ -74,7 +81,13 @@ class BleClient(
 //                setupIndication(gatt)
 //                gatt.requestMtu(128)
             } else {
-                logger.debug(TAG, "onServicesDiscovered received: $status")
+                val errorMessage = "Failed to discover services. (status: $status)"
+                logger.error(TAG, errorMessage)
+                discoverServicesCallback.resolve(
+                    DiscoverServicesResult(
+                        isSuccess = false, errorMessage = errorMessage
+                    )
+                )
             }
         }
 
@@ -156,9 +169,9 @@ class BleClient(
 
     fun connect(
         deviceAddress: String,
-        callback: (connectResult: ConnectResult) -> Unit,
+        callback: (ConnectResult) -> Unit,
     ): Boolean {
-        if (connectCallback != null) {
+        if (connectCallback.isSet()) {
             val errorMessage = "Another connection is in progress."
             logger.error(TAG, errorMessage)
             callback(ConnectResult(errorMessage = errorMessage))
@@ -175,7 +188,7 @@ class BleClient(
         val device = try {
             bluetoothAdapter.getRemoteDevice(deviceAddress)
         } catch (e: IllegalArgumentException) {
-            val errorMessage = "Invalid device address. ${e.message}"
+            val errorMessage = "getRemoteDevice failed. ${e.message}"
             logger.error(TAG, errorMessage)
             callback(ConnectResult(errorMessage = errorMessage))
             return false
@@ -189,7 +202,7 @@ class BleClient(
             return false
         }
 
-        this.connectCallback = callback
+        connectCallback.set(callback)
         return true
     }
 
@@ -204,9 +217,66 @@ class BleClient(
         bluetoothGatt?.apply {
             disconnect()
             close()
+            clearCallbacks()
         }
         bluetoothGatt = null
         logger.debug(TAG, "Disconnected from GATT server.")
+    }
+
+    fun clearCallbacks() {
+        val errorMessage = "Manually disconnected GATT"
+        discoverServicesCallback.resolve(
+            DiscoverServicesResult(
+                isSuccess = false, errorMessage = errorMessage
+            )
+        )
+
+        connectCallback.resolve(
+            ConnectResult(
+                isConnected = false,
+                errorMessage = errorMessage,
+            )
+        )
+    }
+
+    suspend fun discoverServices(): DiscoverServicesResult {
+        return suspendCoroutine { continuation ->
+            CoroutineScope(Dispatchers.IO).launch {
+                discoverServices { discoverServicesResult ->
+                    continuation.silentResume(discoverServicesResult)
+                }
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun discoverServices(callback: (DiscoverServicesResult) -> Unit): Boolean {
+        if (bluetoothGatt == null) {
+            val errorMessage = "BluetoothGatt is null."
+            logger.error(TAG, errorMessage)
+            callback(DiscoverServicesResult(errorMessage = errorMessage))
+            return false
+        }
+
+        if (discoverServicesCallback.isSet()) {
+            val errorMessage = "Another discover services is in progress."
+            logger.error(TAG, errorMessage)
+            callback(DiscoverServicesResult(errorMessage = errorMessage))
+            return false
+        }
+
+        bluetoothGatt!!.let { gatt ->
+            val result = gatt.discoverServices()
+            if (!result) {
+                val errorMessage = "Failed to discover services."
+                logger.error(TAG, errorMessage)
+                callback(DiscoverServicesResult(errorMessage = errorMessage))
+                return false
+            }
+
+            discoverServicesCallback.set(callback)
+            return true
+        }
     }
 
     companion object {

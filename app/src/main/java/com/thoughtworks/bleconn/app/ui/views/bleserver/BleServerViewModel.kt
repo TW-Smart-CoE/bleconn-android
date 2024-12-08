@@ -121,7 +121,7 @@ class BleServerViewModel(
                     Log.d(TAG, "Received value: ${value.contentToString()}")
                     GATT_SUCCESS
                 }
-            )
+            ),
         )
     }
 
@@ -131,7 +131,6 @@ class BleServerViewModel(
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_ULTRA_LOW)
             .setConnectable(true)
             .build()
-
 
         val advertiseData = AdvertiseData.Builder()
             .setIncludeDeviceName(false)

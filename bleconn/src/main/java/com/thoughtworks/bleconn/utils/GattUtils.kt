@@ -47,5 +47,33 @@ object GattUtils {
             notifyCharacteristicChanged(device, characteristic, confirm)
         }
     }
+
+    fun getPropertiesString(properties: Int): String {
+        val propertyList = mutableListOf<String>()
+
+        if (properties and BluetoothGattCharacteristic.PROPERTY_BROADCAST != 0) {
+            propertyList.add("BROADCAST")
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_READ != 0) {
+            propertyList.add("READ")
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
+            propertyList.add("WRITE_NO_RESPONSE")
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) {
+            propertyList.add("WRITE")
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
+            propertyList.add("NOTIFY")
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) {
+            propertyList.add("INDICATE")
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_SIGNED_WRITE != 0) {
+            propertyList.add("SIGNED_WRITE")
+        }
+
+        return propertyList.joinToString(separator = " ")
+    }
 }
 

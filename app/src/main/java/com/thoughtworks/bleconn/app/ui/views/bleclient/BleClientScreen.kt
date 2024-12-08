@@ -1,5 +1,7 @@
 package com.thoughtworks.bleconn.app.ui.views.bleclient
 
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattService
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,7 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,7 +32,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.thoughtworks.bleconn.app.R
+import com.thoughtworks.bleconn.app.definitions.BleUUID
 import com.thoughtworks.bleconn.app.di.Dependency
+import com.thoughtworks.bleconn.utils.GattUtils
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 
@@ -103,6 +111,10 @@ fun BleClientScreen(
                     ) {
                         Text(context.getString(R.string.write_wifi_config))
                     }
+
+                    ServiceView(state.value.services.find<BluetoothGattService> {
+                        it.uuid.toString().lowercase() == BleUUID.SERVICE.lowercase()
+                    })
                 }
             }
         }
@@ -120,5 +132,58 @@ fun BleClientScreen(
                 }
             }
         }.launchIn(scope)
+    }
+}
+
+@Composable
+fun ServiceView(service: BluetoothGattService?) {
+    service?.let {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(text = "Service UUID: ${service.uuid}", style = MaterialTheme.typography.bodyLarge)
+            Text(text = "Service Type: ${service.type}", style = MaterialTheme.typography.bodyLarge)
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(service.characteristics) { characteristic ->
+                    CharacteristicCard(characteristic)
+                }
+            }
+        }
+    } ?: run {
+        Text(text = "Service not found", style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
+fun CharacteristicCard(characteristic: BluetoothGattCharacteristic) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(4.dp),
+        elevation = CardDefaults.cardElevation()
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                text = "Characteristic UUID: ${characteristic.uuid}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Properties: ${GattUtils.getPropertiesString(characteristic.properties)}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Permissions: ${characteristic.permissions}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
     }
 }

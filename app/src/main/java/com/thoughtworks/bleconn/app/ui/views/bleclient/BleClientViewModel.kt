@@ -17,6 +17,7 @@ class BleClientViewModel(
         DefaultStore(
             initialState = BleClientState(
                 isConnected = false,
+                services = emptyList(),
             )
         ),
 ) : MVIViewModel<BleClientState, BleClientEvent, BleClientAction>(store) {
@@ -28,7 +29,7 @@ class BleClientViewModel(
         viewModelScope.launch(ioDispatcher) {
             if (address.isNotEmpty()) {
                 val result = bleClient.connect(address)
-                sendAction(BleClientAction.ConnectStatusChanged(result.connected))
+                sendAction(BleClientAction.ConnectStatusChanged(result.isConnected))
             } else {
                 Log.w(TAG, "Address is empty")
             }
@@ -50,6 +51,12 @@ class BleClientViewModel(
                 )
             }
 
+            is BleClientAction.OnServicesDiscovered -> {
+                currentState.copy(
+                    services = action.services,
+                )
+            }
+
             else -> {
                 currentState
             }
@@ -65,10 +72,28 @@ class BleClientViewModel(
                 navigator.navigateBack()
             }
 
+            is BleClientAction.ConnectStatusChanged -> {
+                discoverServicesAsync(action.isConnected)
+            }
+
             is BleClientAction.WriteWiFiConfig -> {
             }
 
             else -> {
+            }
+        }
+    }
+
+    private fun discoverServicesAsync(isConnected: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            if (isConnected) {
+                val result = bleClient.discoverServices()
+                if (!result.isSuccess) {
+                    Log.e(TAG, "Failed to discover services")
+                }
+                sendAction(BleClientAction.OnServicesDiscovered(result.services))
+            } else {
+                sendAction(BleClientAction.OnServicesDiscovered(emptyList()))
             }
         }
     }
