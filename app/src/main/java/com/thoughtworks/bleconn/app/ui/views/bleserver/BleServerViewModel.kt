@@ -156,7 +156,7 @@ class BleServerViewModel(
                         val formattedDate = dateFormat.format(date)
                         formattedDate.toByteArray()
                     },
-                    intervalSeconds = 1,
+                    intervalSeconds = 3,
                 )
             )
         )

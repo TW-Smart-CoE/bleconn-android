@@ -104,11 +104,11 @@ class BleServer(
             handleDescriptorReadWrite(descriptor, device, requestId, responseNeeded, offset, value)
         }
 
-        override fun onNotificationSent(device: BluetoothDevice?, status: Int) {
+        override fun onNotificationSent(device: BluetoothDevice, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                logger.debug(TAG, "Indication acknowledged by client")
+                logger.debug(TAG, "onNotificationSent success")
             } else {
-                logger.error(TAG, "Indication failed with status: $status")
+                logger.error(TAG, "onNotificationSent failed with status: $status")
             }
         }
     }
@@ -325,14 +325,17 @@ class BleServer(
             return
         }
 
+        val confirm = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
         if (!gattServer!!.notifyCharacteristicChangedCompact(
                 device,
                 characteristic,
-                characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0,
+                confirm,
                 value
             )
         ) {
             logger.error(TAG, "Failed to send notification to ${device.address}")
+        } else {
+            logger.debug(TAG, "Send notification. (confirm = $confirm)")
         }
     }
 
