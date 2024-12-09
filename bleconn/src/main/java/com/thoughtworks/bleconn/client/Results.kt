@@ -30,6 +30,6 @@ class ReadResult(
     val value: ByteArray = byteArrayOf(),
 ) : BaseResult(isSuccess, errorMessage)
 
-class NotificationData(
+data class NotificationData(
     val value: ByteArray,
 )

@@ -123,7 +123,7 @@ class BleClientViewModel(
             BleUUID.CHARACTERISTIC_DEVICE_STATUS,
             true,
         ) {
-            Log.d(TAG, "Notification data arrived: $it")
+            Log.d(TAG, "Notification data arrived: ${String(it.value)}")
         }
     }
 
