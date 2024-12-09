@@ -1,13 +1,13 @@
 package com.thoughtworks.bleconn.server.service
 
 import android.bluetooth.BluetoothGattService
-import com.thoughtworks.bleconn.server.characteristic.CharacteristicWrapper
+import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder
 import java.util.UUID
 
-class ServiceWrapper(
+class ServiceHolder(
     val uuid: String,
     val serviceType: Int,
-    val characteristicsWrappers: List<CharacteristicWrapper>,
+    val characteristicsHolders: List<CharacteristicHolder>,
 ) {
     val service = BluetoothGattService(
         UUID.fromString(uuid),
@@ -15,7 +15,7 @@ class ServiceWrapper(
     )
 
     init {
-        characteristicsWrappers.forEach {
+        characteristicsHolders.forEach {
             service.addCharacteristic(it.characteristic)
         }
     }

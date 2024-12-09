@@ -84,17 +84,48 @@ fun BleClientScreen(
                 ) {
                     Text(
                         modifier = Modifier
-                            .padding(top = 16.dp),
+                            .padding(top = 8.dp),
                         text = context.getString(R.string.ble_client),
                         style = MaterialTheme.typography.titleMedium
                     )
 
                     Text(
                         modifier = Modifier
-                            .padding(top = 16.dp),
+                            .padding(top = 8.dp),
                         text = "isConnected: ${state.value.isConnected}",
                         style = MaterialTheme.typography.titleSmall
                     )
+
+                    Text(
+                        modifier = Modifier
+                            .padding(top = 8.dp),
+                        text = "MTU: ${state.value.mtu}",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
+                    Button(
+                        onClick = {
+                            viewModel.sendAction(BleClientAction.RequestMtu(256))
+                        },
+                        enabled = state.value.services.isNotEmpty(),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        Text(context.getString(R.string.request_mtu))
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.sendAction(BleClientAction.ReadDeviceInfo)
+                        },
+                        enabled = state.value.services.isNotEmpty(),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        Text(context.getString(R.string.read_device_info))
+                    }
 
                     Button(
                         onClick = {
@@ -105,11 +136,36 @@ fun BleClientScreen(
                                 )
                             )
                         },
+                        enabled = state.value.services.isNotEmpty(),
                         modifier = Modifier
-                            .padding(top = 16.dp)
+                            .padding(top = 8.dp)
                             .fillMaxWidth(),
                     ) {
                         Text(context.getString(R.string.write_wifi_config))
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.sendAction(BleClientAction.EnableNotification)
+                        },
+                        enabled = state.value.services.isNotEmpty(),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        Text(context.getString(R.string.enable_notification))
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.sendAction(BleClientAction.DisableNotification)
+                        },
+                        enabled = state.value.services.isNotEmpty(),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        Text(context.getString(R.string.disable_notification))
                     }
 
                     ServiceView(state.value.services.find<BluetoothGattService> {
@@ -145,12 +201,12 @@ fun ServiceView(service: BluetoothGattService?) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(text = "Service UUID: ${service.uuid}", style = MaterialTheme.typography.bodyLarge)
-            Text(text = "Service Type: ${service.type}", style = MaterialTheme.typography.bodyLarge)
+//            Text(text = "Service Type: ${service.type}", style = MaterialTheme.typography.bodyLarge)
 
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp),
+                    .padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(service.characteristics) { characteristic ->

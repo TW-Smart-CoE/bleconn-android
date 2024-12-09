@@ -22,9 +22,15 @@ import com.thoughtworks.bleconn.app.di.Dependency
 import com.thoughtworks.bleconn.app.foundation.mvi.DefaultStore
 import com.thoughtworks.bleconn.app.foundation.mvi.MVIViewModel
 import com.thoughtworks.bleconn.app.foundation.mvi.Store
-import com.thoughtworks.bleconn.server.characteristic.CharacteristicWrapper
-import com.thoughtworks.bleconn.server.service.ServiceWrapper
+import com.thoughtworks.bleconn.definitions.DescriptorUUID
+import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder
+import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder.ReadWriteResult
+import com.thoughtworks.bleconn.server.descriptor.DescriptorHolder
+import com.thoughtworks.bleconn.server.service.ServiceHolder
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 class BleServerViewModel(
@@ -37,6 +43,7 @@ class BleServerViewModel(
         ),
 ) : MVIViewModel<BleServerState, BleServerEvent, BleServerAction>(store) {
     private val navigator = dependency.navigator
+    private val ioDispatcher = dependency.coroutineDispatchers.ioDispatcher
     private val bleServer = dependency.bleServer
     private val bleAdvertiser = dependency.bleAdvertiser
 
@@ -101,27 +108,67 @@ class BleServerViewModel(
         return bleServer.start(buildServices())
     }
 
-    private fun buildServices(): List<ServiceWrapper> {
+    private fun buildServices(): List<ServiceHolder> {
         return listOf(
-            ServiceWrapper(
+            ServiceHolder(
                 uuid = BleUUID.SERVICE,
                 serviceType = SERVICE_TYPE_PRIMARY,
-                characteristicsWrappers = buildServiceCharacteristics(),
+                characteristicsHolders = buildServiceCharacteristics(),
             )
         )
     }
 
-    private fun buildServiceCharacteristics(): List<CharacteristicWrapper> {
+    private fun buildServiceCharacteristics(): List<CharacteristicHolder> {
         return listOf(
-            CharacteristicWrapper(
+            CharacteristicHolder(
+                uuid = BleUUID.CHARACTERISTIC_DEVICE_INFO,
+                properties = BluetoothGattCharacteristic.PROPERTY_READ,
+                permissions = BluetoothGattCharacteristic.PERMISSION_READ,
+                handleReadWrite = { address, value ->
+                    Log.d(TAG, "Read value")
+                    ReadWriteResult(
+                        status = GATT_SUCCESS,
+                        value = "ble device 001".toByteArray(),
+                    )
+                }
+            ),
+            CharacteristicHolder(
                 uuid = BleUUID.CHARACTERISTIC_WIFI,
                 properties = BluetoothGattCharacteristic.PROPERTY_WRITE,
                 permissions = BluetoothGattCharacteristic.PERMISSION_WRITE,
-                handleReadWrite = { deviceAddress, value ->
-                    Log.d(TAG, "Received value: ${value.contentToString()}")
-                    GATT_SUCCESS
+                handleReadWrite = { address, value ->
+                    Log.d(TAG, "Write value: ${value.contentToString()}")
+                    ReadWriteResult(
+                        status = GATT_SUCCESS,
+                    )
                 }
             ),
+            CharacteristicHolder(
+                uuid = BleUUID.CHARACTERISTIC_DEVICE_STATUS,
+                properties = BluetoothGattCharacteristic.PROPERTY_INDICATE,
+                permissions = BluetoothGattCharacteristic.PERMISSION_READ,
+                descriptorHolders = buildDeviceStatusDescriptors(),
+                notificationHolder = CharacteristicHolder.NotificationHolder(
+                    handleNotification = {
+                        Log.d(TAG, "Notification value")
+                        val dateFormat =
+                            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                        val date = Date()
+                        val formattedDate = dateFormat.format(date)
+                        formattedDate.toByteArray()
+                    },
+                    intervalSeconds = 1,
+                )
+            )
+        )
+    }
+
+    private fun buildDeviceStatusDescriptors(): List<DescriptorHolder> {
+        return listOf(
+            DescriptorHolder(
+                uuid = DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG,
+                permissions = BluetoothGattCharacteristic.PERMISSION_READ or BluetoothGattCharacteristic.PERMISSION_WRITE,
+            )
         )
     }
 

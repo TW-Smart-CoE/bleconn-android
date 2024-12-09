@@ -7,9 +7,13 @@
     <string name="ble_server" translatable="false">Ble Server</string>
     <string name="ble_client" translatable="false">Ble Client</string>
     <string name="ble_scanner" translatable="false">Ble Scanner</string>
-    <string name="start">start</string>
-    <string name="start_scan">start scan</string>
-    <string name="stop_scan">stop scan</string>
-    <string name="stop">stop</string>
+    <string name="start">Start</string>
+    <string name="start_scan">Start scan</string>
+    <string name="stop_scan">Stop scan</string>
+    <string name="stop">Stop</string>
     <string name="write_wifi_config">Write WiFiConfig</string>
+    <string name="request_mtu">Request MTU</string>
+    <string name="read_device_info">Read device info</string>
+    <string name="enable_notification">Enable notification</string>
+    <string name="disable_notification">Disable notification</string>
 </resources>

@@ -7,17 +7,18 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattServer
 import android.bluetooth.BluetoothGattServerCallback
-import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
-import com.thoughtworks.bleconn.server.service.ServiceWrapper
+import com.thoughtworks.bleconn.definitions.DescriptorUUID
+import com.thoughtworks.bleconn.server.service.ServiceHolder
 import com.thoughtworks.bleconn.utils.GattUtils.notifyCharacteristicChangedCompact
-import com.thoughtworks.bleconn.utils.TestUUID
 import com.thoughtworks.bleconn.utils.logger.DefaultLogger
 import com.thoughtworks.bleconn.utils.logger.Logger
 import com.thoughtworks.bleconn.utils.logger.debug
 import com.thoughtworks.bleconn.utils.logger.error
+import java.util.Timer
+import java.util.TimerTask
 import java.util.UUID
 
 class BleServer(
@@ -26,8 +27,10 @@ class BleServer(
 ) {
     private val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    private var notificationTimer: Timer? = null
     private var gattServer: BluetoothGattServer? = null
-    private val serviceWrappers = mutableListOf<ServiceWrapper>()
+    private val serviceHolders = mutableListOf<ServiceHolder>()
+    private val subscribedDevicesLock = Any()
 
     private val gattServerCallback = object : BluetoothGattServerCallback() {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
@@ -46,8 +49,15 @@ class BleServer(
             offset: Int,
             characteristic: BluetoothGattCharacteristic,
         ) {
-            logger.debug(TAG, "Read request received from ${device?.address}")
-            handleCharacteristicReadWrite(offset, device, requestId)
+            logger.debug(TAG, "Read request received from ${device.address}")
+            handleCharacteristicReadWrite(
+                characteristic,
+                device,
+                requestId,
+                true,
+                offset,
+                byteArrayOf()
+            )
         }
 
         @SuppressLint("MissingPermission")
@@ -61,7 +71,37 @@ class BleServer(
             value: ByteArray,
         ) {
             logger.debug(TAG, "Write request received from ${device.address}")
-            handleCharacteristicReadWrite(offset, device, requestId)
+            handleCharacteristicReadWrite(
+                characteristic,
+                device,
+                requestId,
+                responseNeeded,
+                offset,
+                value
+            )
+        }
+
+        override fun onDescriptorReadRequest(
+            device: BluetoothDevice,
+            requestId: Int,
+            offset: Int,
+            descriptor: BluetoothGattDescriptor,
+        ) {
+            logger.debug(TAG, "Descriptor read request received from ${device.address}")
+            handleDescriptorReadWrite(descriptor, device, requestId, true, offset, byteArrayOf())
+        }
+
+        override fun onDescriptorWriteRequest(
+            device: BluetoothDevice,
+            requestId: Int,
+            descriptor: BluetoothGattDescriptor,
+            preparedWrite: Boolean,
+            responseNeeded: Boolean,
+            offset: Int,
+            value: ByteArray,
+        ) {
+            logger.debug(TAG, "Descriptor write request received from ${device.address}")
+            handleDescriptorReadWrite(descriptor, device, requestId, responseNeeded, offset, value)
         }
 
         override fun onNotificationSent(device: BluetoothDevice?, status: Int) {
@@ -75,11 +115,17 @@ class BleServer(
 
     @SuppressLint("MissingPermission")
     private fun handleCharacteristicReadWrite(
-        offset: Int,
+        characteristic: BluetoothGattCharacteristic,
         device: BluetoothDevice,
         requestId: Int,
+        responseNeeded: Boolean,
+        offset: Int,
+        value: ByteArray,
     ) {
-        serviceWrappers.forEach { serviceWrapper ->
+        val characteristicHolder = serviceHolders
+            .flatMap { it.characteristicsHolders }
+            .find { it.uuid.lowercase() == characteristic.uuid.toString().lowercase() }
+        characteristicHolder?.let {
             if (offset != 0) {
                 gattServer?.sendResponse(
                     device,
@@ -91,25 +137,117 @@ class BleServer(
                 return
             }
 
-            serviceWrapper.characteristicsWrappers.forEach { characteristicWrapper ->
-                gattServer?.getService(UUID.fromString(serviceWrapper.uuid))?.getCharacteristic(
-                    UUID.fromString(characteristicWrapper.uuid)
-                )?.let { characteristic ->
-                    val result = characteristicWrapper.handleReadWrite(
-                        device.address,
-                        ByteArray(0)
-                    )
-                    gattServer?.sendResponse(device, requestId, result, offset, null)
+            val result = characteristicHolder.handleReadWrite(
+                device.address,
+                value,
+            )
+
+            if (responseNeeded) {
+                gattServer?.sendResponse(
+                    device,
+                    requestId,
+                    result.status,
+                    offset,
+                    result.value,
+                )
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun handleDescriptorReadWrite(
+        descriptor: BluetoothGattDescriptor,
+        device: BluetoothDevice,
+        requestId: Int,
+        responseNeeded: Boolean,
+        offset: Int,
+        value: ByteArray,
+    ) {
+        val descriptorHolders = serviceHolders
+            .flatMap { it.characteristicsHolders }
+            .flatMap { it.descriptorHolders }
+            .find { it.uuid.lowercase() == descriptor.uuid.toString().lowercase() }
+        descriptorHolders?.let {
+            if (offset != 0) {
+                gattServer?.sendResponse(
+                    device,
+                    requestId,
+                    BluetoothGatt.GATT_INVALID_OFFSET,
+                    offset,
+                    null
+                )
+                return
+            }
+
+            val result = descriptorHolders.handleReadWrite(
+                device.address,
+                value,
+            )
+
+            if (responseNeeded) {
+                gattServer?.sendResponse(
+                    device,
+                    requestId,
+                    result.status,
+                    offset,
+                    result.value,
+                )
+            }
+
+            arrangeSubscribedDevices(device, descriptor, value)
+        }
+    }
+
+    private fun arrangeSubscribedDevices(
+        device: BluetoothDevice,
+        descriptor: BluetoothGattDescriptor,
+        value: ByteArray,
+    ) {
+        if (value.isNotEmpty()) {
+            if (descriptor.uuid == UUID.fromString(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG)) {
+                val characteristic = descriptor.characteristic
+                val characteristicHolder = serviceHolders
+                    .flatMap { it.characteristicsHolders }
+                    .find { it.uuid.lowercase() == characteristic.uuid.toString().lowercase() }
+                characteristicHolder?.let { holder ->
+                    synchronized(subscribedDevicesLock) {
+                        when {
+                            value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) -> {
+                                logger.debug(
+                                    TAG,
+                                    "Notifications enabled for ${characteristic.uuid}"
+                                )
+                                if (holder.notificationHolder?.subscribedDevices?.find { it.address == device.address } == null) {
+                                    holder.notificationHolder?.subscribedDevices?.add(device)
+                                }
+                            }
+
+                            value.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE) -> {
+                                logger.debug(TAG, "Indications enabled for ${characteristic.uuid}")
+                                if (holder.notificationHolder?.subscribedDevices?.find { it.address == device.address } == null) {
+                                    holder.notificationHolder?.subscribedDevices?.add(device)
+                                }
+                            }
+
+                            value.contentEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) -> {
+                                logger.debug(
+                                    TAG,
+                                    "Notifications/Indications disabled for ${characteristic.uuid}"
+                                )
+                                holder.notificationHolder?.subscribedDevices?.remove(device)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
     @SuppressLint("MissingPermission")
-    fun start(serviceWrappers: List<ServiceWrapper>): Boolean {
+    fun start(serviceHolders: List<ServiceHolder>): Boolean {
         gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
         gattServer?.apply {
-            serviceWrappers.forEach { serviceWrapper ->
+            serviceHolders.forEach { serviceWrapper ->
                 if (!addService(serviceWrapper.service)) {
                     stop()
                     return false
@@ -124,71 +262,77 @@ class BleServer(
             }
         }
 
-        this.serviceWrappers.addAll(serviceWrappers)
+        this.serviceHolders.addAll(serviceHolders)
+        startNotificationLoop()
         return true
     }
 
     @SuppressLint("MissingPermission")
     fun stop() {
+        stopNotificationLoop()
         gattServer?.close()
         gattServer = null
-        serviceWrappers.clear()
+        serviceHolders.clear()
     }
 
+    private fun startNotificationLoop() {
+        notificationTimer = Timer()
+        notificationTimer?.apply {
+            schedule(object : TimerTask() {
+                override fun run() {
+                    serviceHolders
+                        .flatMap { it.characteristicsHolders }
+                        .forEach { characteristicHolder ->
+                            characteristicHolder.notificationHolder?.let { notificationHolder ->
+                                synchronized(subscribedDevicesLock) {
+                                    if (notificationHolder.subscribedDevices.isNotEmpty()) {
+                                        val currentTime = System.currentTimeMillis() / 1000
+                                        if (notificationHolder.intervalSeconds > 0 &&
+                                            currentTime % notificationHolder.intervalSeconds == 0L
+                                        ) {
+                                            val data = notificationHolder.handleNotification()
+                                            notificationHolder.subscribedDevices.forEach { device ->
+                                                sendNotification(
+                                                    device,
+                                                    characteristicHolder.characteristic,
+                                                    data
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                }
+            }, 0, 1000)
+        }
+    }
+
+    private fun stopNotificationLoop() {
+        notificationTimer?.cancel()
+        notificationTimer = null
+    }
+
+
     @SuppressLint("MissingPermission")
-    fun start(): Boolean {
-        gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
-
-        val service = BluetoothGattService(
-            UUID.fromString(TestUUID.ServerUUID),
-            BluetoothGattService.SERVICE_TYPE_PRIMARY
-        )
-
-        val wifiConfigCharacteristic = BluetoothGattCharacteristic(
-            UUID.fromString(TestUUID.WifiConfigCharacteristicUUID),
-            BluetoothGattCharacteristic.PROPERTY_WRITE,
-            BluetoothGattCharacteristic.PERMISSION_WRITE
-        )
-
-        val wifiResultCharacteristic = BluetoothGattCharacteristic(
-            UUID.fromString(TestUUID.WifiConfigCharacteristicResultUUID),
-            BluetoothGattCharacteristic.PROPERTY_INDICATE,
-            BluetoothGattCharacteristic.PERMISSION_READ
-        )
-
-        val cccd = BluetoothGattDescriptor(
-            UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"),
-            BluetoothGattDescriptor.PERMISSION_WRITE or BluetoothGattDescriptor.PERMISSION_READ
-        )
-        wifiResultCharacteristic.addDescriptor(cccd)
-
-        service.addCharacteristic(wifiConfigCharacteristic)
-        service.addCharacteristic(wifiResultCharacteristic)
-
-        gattServer?.addService(service)
-
-        logger.debug(TAG, "Service UUID: ${service.uuid}")
-        service.characteristics.forEach { char ->
-            logger.debug(TAG, "Characteristic UUID: ${char.uuid}")
-            logger.debug(TAG, "Properties: ${char.properties}")
-            logger.debug(TAG, "Permissions: ${char.permissions}")
+    fun sendNotification(
+        device: BluetoothDevice,
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray,
+    ) {
+        if (gattServer == null) {
+            logger.error(TAG, "Gatt server is not started")
+            return
         }
 
-        return true
-    }
-
-    @SuppressLint("MissingPermission")
-    fun sendIndication(device: BluetoothDevice, success: Boolean) {
-        gattServer?.getService(UUID.fromString(TestUUID.ServerUUID))?.getCharacteristic(
-            UUID.fromString(TestUUID.WifiConfigCharacteristicResultUUID)
-        )?.let { characteristic ->
-            val result = if (success) "true" else "false"
-            gattServer?.notifyCharacteristicChangedCompact(
+        if (!gattServer!!.notifyCharacteristicChangedCompact(
                 device,
                 characteristic,
-                true,
-                result.toByteArray()
+                characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0,
+                value
             )
+        ) {
+            logger.error(TAG, "Failed to send notification to ${device.address}")
         }
     }
 

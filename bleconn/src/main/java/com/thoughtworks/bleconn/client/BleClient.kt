@@ -7,12 +7,13 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
-import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import com.thoughtworks.bleconn.definitions.DescriptorUUID
 import com.thoughtworks.bleconn.utils.CallbackHolder
 import com.thoughtworks.bleconn.utils.GattUtils.writeCharacteristicCompact
-import com.thoughtworks.bleconn.utils.TestUUID
+import com.thoughtworks.bleconn.utils.GattUtils.writeDescriptorCompact
+import com.thoughtworks.bleconn.utils.NotificationHolder
 import com.thoughtworks.bleconn.utils.logger.DefaultLogger
 import com.thoughtworks.bleconn.utils.logger.Logger
 import com.thoughtworks.bleconn.utils.logger.debug
@@ -28,24 +29,17 @@ class BleClient(
     private val context: Context,
     private val logger: Logger = DefaultLogger(),
 ) {
-    data class ConnectResult(
-        val isConnected: Boolean = false,
-        val errorMessage: String = "",
-    )
-
-    data class DiscoverServicesResult(
-        val isSuccess: Boolean = false,
-        val services: List<BluetoothGattService> = emptyList(),
-        val errorMessage: String = "",
-    )
-
     private val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
     private var bluetoothGatt: BluetoothGatt? = null
 
-    private var connectCallback = CallbackHolder<ConnectResult>()
-    private var discoverServicesCallback = CallbackHolder<DiscoverServicesResult>()
+    private val connectCallback = CallbackHolder<Result>()
+    private val discoverServicesCallback = CallbackHolder<DiscoverServicesResult>()
+    private val requestMtuCallback = CallbackHolder<MtuResult>()
+    private val readCallback = CallbackHolder<ReadResult>()
+    private val writeCallback = CallbackHolder<Result>()
+    private val notificationCallback = NotificationHolder<NotificationData>()
 
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
@@ -53,11 +47,11 @@ class BleClient(
             super.onConnectionStateChange(gatt, status, newState)
             if (newState == BluetoothGatt.STATE_CONNECTED) {
                 logger.debug(TAG, "Connected to GATT server.")
-                connectCallback.resolve(ConnectResult(isConnected = true))
+                connectCallback.resolve(Result(isSuccess = true))
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
                 val errorMessage = "Disconnected from GATT server."
                 logger.debug(TAG, errorMessage)
-                connectCallback.resolve(ConnectResult(errorMessage = errorMessage))
+                connectCallback.resolve(Result(errorMessage = errorMessage))
             }
         }
 
@@ -78,8 +72,6 @@ class BleClient(
                         logger.debug(TAG, "Characteristic: ${it.uuid}")
                     }
                 }
-//                setupIndication(gatt)
-//                gatt.requestMtu(128)
             } else {
                 val errorMessage = "Failed to discover services. (status: $status)"
                 logger.error(TAG, errorMessage)
@@ -91,30 +83,30 @@ class BleClient(
             }
         }
 
-        @SuppressLint("MissingPermission")
-        private fun setupIndication(gatt: BluetoothGatt) {
-            val service = gatt.getService(UUID.fromString(TestUUID.ServerUUID))
-            val characteristic =
-                service.getCharacteristic(UUID.fromString(TestUUID.WifiConfigCharacteristicResultUUID))
-            gatt.setCharacteristicNotification(characteristic, true)
-
-            val descriptor =
-                characteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
-            if (descriptor == null) {
-                logger.error(TAG, "Descriptor is null.")
-                return
-            }
-            descriptor.value = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
-            gatt.writeDescriptor(descriptor)
-        }
-
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
-            val receivedData = String(characteristic.value)
-            logger.debug(TAG, "Received Indication: $receivedData")
+            val receivedData = String(value)
+            logger.debug(TAG, "Received: $receivedData")
+            notificationCallback.notify(characteristic.uuid.toString(), NotificationData(value))
+        }
+
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+            status: Int,
+        ) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                logger.debug(TAG, "Characteristic read successfully.")
+                readCallback.resolve(ReadResult(isSuccess = true, value = value))
+            } else {
+                val errorMessage = "Characteristic read failed with status: $status"
+                logger.debug(TAG, errorMessage)
+                readCallback.resolve(ReadResult(isSuccess = false, errorMessage = errorMessage))
+            }
         }
 
         override fun onCharacteristicWrite(
@@ -125,8 +117,11 @@ class BleClient(
             super.onCharacteristicWrite(gatt, characteristic, status)
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 logger.debug(TAG, "Characteristic written successfully.")
+                writeCallback.resolve(Result(isSuccess = true))
             } else {
-                logger.debug(TAG, "Characteristic write failed with status: $status")
+                val errorMessage = "Characteristic write failed with status: $status"
+                logger.debug(TAG, errorMessage)
+                writeCallback.resolve(Result(isSuccess = false, errorMessage = errorMessage))
             }
         }
 
@@ -134,30 +129,22 @@ class BleClient(
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 logger.debug("BLE", "MTU changed to $mtu")
-                gatt.getService(UUID.fromString(TestUUID.ServerUUID))?.let { service ->
-                    service.getCharacteristic(UUID.fromString(TestUUID.WifiConfigCharacteristicUUID))
-                        ?.let { characteristic ->
-                            logger.debug(TAG, "Writing characteristic.")
-                            val bytes = "12345678901234____________sadfasdfasdfadsfas".toByteArray()
-                            if (gatt.writeCharacteristicCompact(
-                                    characteristic,
-                                    bytes,
-                                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                                )
-                            ) {
-                                logger.debug(TAG, "Characteristic written successfully.")
-                            } else {
-                                logger.debug(TAG, "Characteristic write failed.")
-                            }
-                        }
-                }
+                requestMtuCallback.resolve(MtuResult(isSuccess = true, mtu = mtu))
             } else {
-                logger.error(TAG, "MTU change failed with status $status")
+                val errorMessage = "MTU change failed with status $status"
+                logger.error(TAG, errorMessage)
+                requestMtuCallback.resolve(
+                    MtuResult(
+                        isSuccess = false,
+                        mtu = mtu,
+                        errorMessage = errorMessage
+                    )
+                )
             }
         }
     }
 
-    suspend fun connect(deviceAddress: String): ConnectResult {
+    suspend fun connect(deviceAddress: String): Result {
         return suspendCoroutine { continuation ->
             CoroutineScope(Dispatchers.IO).launch {
                 connect(deviceAddress) { connectResult ->
@@ -169,19 +156,19 @@ class BleClient(
 
     fun connect(
         deviceAddress: String,
-        callback: (ConnectResult) -> Unit,
+        callback: (Result) -> Unit,
     ): Boolean {
         if (connectCallback.isSet()) {
             val errorMessage = "Another connection is in progress."
             logger.error(TAG, errorMessage)
-            callback(ConnectResult(errorMessage = errorMessage))
+            callback(Result(errorMessage = errorMessage))
             return false
         }
 
         if (!BluetoothAdapter.checkBluetoothAddress(deviceAddress)) {
             val errorMessage = "Invalid device address. $deviceAddress"
             logger.error(TAG, errorMessage)
-            callback(ConnectResult(errorMessage = errorMessage))
+            callback(Result(errorMessage = errorMessage))
             return false
         }
 
@@ -190,7 +177,7 @@ class BleClient(
         } catch (e: IllegalArgumentException) {
             val errorMessage = "getRemoteDevice failed. ${e.message}"
             logger.error(TAG, errorMessage)
-            callback(ConnectResult(errorMessage = errorMessage))
+            callback(Result(errorMessage = errorMessage))
             return false
         }
 
@@ -198,7 +185,7 @@ class BleClient(
         if (!result) {
             val errorMessage = "Failed to connect to GATT server."
             logger.error(TAG, errorMessage)
-            callback(ConnectResult(errorMessage = errorMessage))
+            callback(Result(errorMessage = errorMessage))
             return false
         }
 
@@ -223,8 +210,32 @@ class BleClient(
         logger.debug(TAG, "Disconnected from GATT server.")
     }
 
-    fun clearCallbacks() {
+    private fun clearCallbacks() {
         val errorMessage = "Manually disconnected GATT"
+
+        readCallback.resolve(
+            ReadResult(
+                isSuccess = false,
+                errorMessage = errorMessage,
+            )
+        )
+
+        writeCallback.resolve(
+            Result(
+                isSuccess = false,
+                errorMessage = errorMessage,
+            )
+        )
+
+        notificationCallback.clear()
+
+        requestMtuCallback.resolve(
+            MtuResult(
+                isSuccess = false,
+                errorMessage = errorMessage,
+            )
+        )
+
         discoverServicesCallback.resolve(
             DiscoverServicesResult(
                 isSuccess = false, errorMessage = errorMessage
@@ -232,8 +243,8 @@ class BleClient(
         )
 
         connectCallback.resolve(
-            ConnectResult(
-                isConnected = false,
+            Result(
+                isSuccess = false,
                 errorMessage = errorMessage,
             )
         )
@@ -275,6 +286,296 @@ class BleClient(
             }
 
             discoverServicesCallback.set(callback)
+            return true
+        }
+    }
+
+    suspend fun requestMtu(mtu: Int): MtuResult {
+        return suspendCoroutine { continuation ->
+            CoroutineScope(Dispatchers.IO).launch {
+                requestMtu(mtu) { result ->
+                    continuation.silentResume(result)
+                }
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun requestMtu(mtu: Int, callback: (MtuResult) -> Unit): Boolean {
+        if (bluetoothGatt == null) {
+            val errorMessage = "BluetoothGatt is null."
+            logger.error(TAG, errorMessage)
+            callback(MtuResult(errorMessage = errorMessage))
+            return false
+        }
+
+        if (requestMtuCallback.isSet()) {
+            val errorMessage = "Another request MTU is in progress."
+            logger.error(TAG, errorMessage)
+            callback(MtuResult(errorMessage = errorMessage))
+            return false
+        }
+
+        bluetoothGatt!!.let { gatt ->
+            val result = gatt.requestMtu(mtu)
+            if (!result) {
+                val errorMessage = "Failed to request MTU."
+                logger.error(TAG, errorMessage)
+                callback(MtuResult(errorMessage = errorMessage))
+                return false
+            }
+
+            requestMtuCallback.set(callback)
+            return true
+        }
+    }
+
+    suspend fun readCharacteristic(
+        serviceUUID: String,
+        characteristicUUID: String,
+    ): ReadResult {
+        return suspendCoroutine { continuation ->
+            CoroutineScope(Dispatchers.IO).launch {
+                readCharacteristic(serviceUUID, characteristicUUID) { result ->
+                    continuation.silentResume(result)
+                }
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun readCharacteristic(
+        serviceUUID: String,
+        characteristicUUID: String,
+        callback: (ReadResult) -> Unit,
+    ): Boolean {
+        if (bluetoothGatt == null) {
+            val errorMessage = "BluetoothGatt is null."
+            logger.error(TAG, errorMessage)
+            callback(ReadResult(errorMessage = errorMessage))
+            return false
+        }
+
+        if (readCallback.isSet()) {
+            val errorMessage = "Another read characteristic is in progress."
+            logger.error(TAG, errorMessage)
+            callback(ReadResult(errorMessage = errorMessage))
+            return false
+        }
+
+        bluetoothGatt!!.let { gatt ->
+            val service = gatt.getService(UUID.fromString(serviceUUID))
+            if (service == null) {
+                val errorMessage = "Service is null."
+                logger.error(TAG, errorMessage)
+                callback(ReadResult(errorMessage = errorMessage))
+                return false
+            }
+
+            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            if (characteristic == null) {
+                val errorMessage = "Characteristic is null."
+                logger.error(TAG, errorMessage)
+                callback(ReadResult(errorMessage = errorMessage))
+                return false
+            }
+
+            val result = gatt.readCharacteristic(characteristic)
+            if (!result) {
+                val errorMessage = "Failed to read characteristic."
+                logger.error(TAG, errorMessage)
+                callback(ReadResult(errorMessage = errorMessage))
+                return false
+            }
+
+            readCallback.set(callback)
+
+            return true
+        }
+    }
+
+    suspend fun writeCharacteristic(
+        serviceUUID: String,
+        characteristicUUID: String,
+        value: ByteArray,
+        writeType: Int,
+    ): Result {
+        return suspendCoroutine { continuation ->
+            CoroutineScope(Dispatchers.IO).launch {
+                writeCharacteristic(serviceUUID, characteristicUUID, value, writeType) { result ->
+                    continuation.silentResume(result)
+                }
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun writeCharacteristic(
+        serviceUUID: String,
+        characteristicUUID: String,
+        value: ByteArray,
+        writeType: Int,
+        callback: (Result) -> Unit,
+    ): Boolean {
+        if (bluetoothGatt == null) {
+            val errorMessage = "BluetoothGatt is null."
+            logger.error(TAG, errorMessage)
+            callback(Result(errorMessage = errorMessage))
+            return false
+        }
+
+        if (writeCallback.isSet()) {
+            val errorMessage = "Another write characteristic is in progress."
+            logger.error(TAG, errorMessage)
+            callback(Result(errorMessage = errorMessage))
+            return false
+        }
+
+        bluetoothGatt!!.let { gatt ->
+            val service = gatt.getService(UUID.fromString(serviceUUID))
+            if (service == null) {
+                val errorMessage = "Service is null."
+                logger.error(TAG, errorMessage)
+                callback(Result(errorMessage = errorMessage))
+                return false
+            }
+
+            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            if (characteristic == null) {
+                val errorMessage = "Characteristic is null."
+                logger.error(TAG, errorMessage)
+                callback(Result(errorMessage = errorMessage))
+                return false
+            }
+
+            val result = gatt.writeCharacteristicCompact(
+                characteristic,
+                value,
+                writeType,
+            )
+
+            if (!result) {
+                val errorMessage = "Failed to write characteristic."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            if (writeType == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) {
+                callback(Result(isSuccess = true))
+            } else {
+                writeCallback.set(callback)
+            }
+
+            return true
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun enableCharacteristicNotification(
+        serviceUUID: String,
+        characteristicUUID: String,
+        confirm: Boolean,
+        callback: (NotificationData) -> Unit,
+    ): Boolean {
+        if (bluetoothGatt == null) {
+            val errorMessage = "BluetoothGatt is null."
+            logger.error(TAG, errorMessage)
+            return false
+        }
+
+        if (notificationCallback.contains(characteristicUUID)) {
+            val errorMessage = "Another enable characteristic notification is in progress."
+            logger.error(TAG, errorMessage)
+            return false
+        }
+
+        bluetoothGatt!!.let { gatt ->
+            val service = gatt.getService(UUID.fromString(serviceUUID))
+            if (service == null) {
+                val errorMessage = "Service is null."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            if (characteristic == null) {
+                val errorMessage = "Characteristic is null."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            if (!gatt.setCharacteristicNotification(characteristic, true)) {
+                val errorMessage = "Failed to set characteristic notification."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            if (!gatt.writeDescriptorCompact(
+                    characteristic.getDescriptor(UUID.fromString(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG)),
+                    if (confirm) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                )
+            ) {
+                val errorMessage = "Failed to write descriptor."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            notificationCallback.add(characteristicUUID, callback)
+
+            return true
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun disableCharacteristicNotification(
+        serviceUUID: String,
+        characteristicUUID: String,
+    ): Boolean {
+        if (bluetoothGatt == null) {
+            val errorMessage = "BluetoothGatt is null."
+            logger.error(TAG, errorMessage)
+            return false
+        }
+
+        if (!notificationCallback.contains(characteristicUUID)) {
+            val errorMessage = "No notification callback is set."
+            logger.error(TAG, errorMessage)
+            return false
+        }
+
+        bluetoothGatt!!.let { gatt ->
+            val service = gatt.getService(UUID.fromString(serviceUUID))
+            if (service == null) {
+                val errorMessage = "Service is null."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            if (characteristic == null) {
+                val errorMessage = "Characteristic is null."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            if (!gatt.setCharacteristicNotification(characteristic, false)) {
+                val errorMessage = "Failed to set characteristic notification."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
+            notificationCallback.remove(characteristicUUID)
+
+            if (!gatt.writeDescriptorCompact(
+                    characteristic.getDescriptor(UUID.fromString(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG)),
+                    BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+                )
+            ) {
+                val errorMessage = "Failed to write descriptor."
+                logger.error(TAG, errorMessage)
+                return false
+            }
+
             return true
         }
     }

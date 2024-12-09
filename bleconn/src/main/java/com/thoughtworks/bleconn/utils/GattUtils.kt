@@ -3,6 +3,7 @@ package com.thoughtworks.bleconn.utils
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattServer
 import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
@@ -29,21 +30,34 @@ object GattUtils {
     }
 
     @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
+    fun BluetoothGatt.writeDescriptorCompact(
+        descriptor: BluetoothGattDescriptor,
+        value: ByteArray,
+    ): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return writeDescriptor(descriptor, value) == BluetoothStatusCodes.SUCCESS
+        } else {
+            descriptor.value = value
+            return writeDescriptor(descriptor)
+        }
+    }
+
+    @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
     fun BluetoothGattServer.notifyCharacteristicChangedCompact(
         device: BluetoothDevice,
         characteristic: BluetoothGattCharacteristic,
         confirm: Boolean,
-        toByteArray: ByteArray,
+        value: ByteArray,
     ): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notifyCharacteristicChanged(
                 device,
                 characteristic,
                 confirm,
-                toByteArray,
+                value,
             ) == BluetoothStatusCodes.SUCCESS
         } else {
-            characteristic.value = toByteArray
+            characteristic.value = value
             notifyCharacteristicChanged(device, characteristic, confirm)
         }
     }
