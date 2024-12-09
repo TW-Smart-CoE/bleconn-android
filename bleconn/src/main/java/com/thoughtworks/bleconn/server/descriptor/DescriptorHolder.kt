@@ -5,7 +5,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import java.util.UUID
 
 class DescriptorHolder(
-    val uuid: String,
+    val uuid: UUID,
     val permissions: Int,
     val handleReadWrite: (deviceAddress: String, value: ByteArray) -> ReadWriteResult = { _, _ ->
         ReadWriteResult(
@@ -19,7 +19,7 @@ class DescriptorHolder(
     )
 
     val descriptor = BluetoothGattDescriptor(
-        UUID.fromString(uuid),
+        uuid,
         permissions,
     )
 }

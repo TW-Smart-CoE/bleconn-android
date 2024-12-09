@@ -5,12 +5,12 @@ import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder
 import java.util.UUID
 
 class ServiceHolder(
-    val uuid: String,
+    val uuid: UUID,
     val serviceType: Int,
     val characteristicsHolders: List<CharacteristicHolder>,
 ) {
     val service = BluetoothGattService(
-        UUID.fromString(uuid),
+        uuid,
         serviceType
     )
 

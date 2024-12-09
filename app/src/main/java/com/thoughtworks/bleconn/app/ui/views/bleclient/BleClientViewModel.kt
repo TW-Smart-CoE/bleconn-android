@@ -183,7 +183,7 @@ class BleClientViewModel(
                     Log.e(TAG, "Failed to discover services")
                 }
                 sendAction(BleClientAction.OnServicesDiscovered(result.services.filter {
-                    it.uuid.toString().lowercase() == BleUUID.SERVICE.lowercase()
+                    it.uuid == BleUUID.SERVICE
                 }))
             } else {
                 sendAction(BleClientAction.OnServicesDiscovered(emptyList()))

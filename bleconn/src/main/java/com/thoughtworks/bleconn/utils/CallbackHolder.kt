@@ -19,26 +19,26 @@ class CallbackHolder<T> {
     }
 }
 
-class NotificationHolder<T> {
-    private val callbacks = ConcurrentHashMap<String, (T) -> Unit>()
+class NotificationHolder<K, V> {
+    private val callbacks = ConcurrentHashMap<K, (V) -> Unit>()
 
-    fun contains(characteristicUUID: String): Boolean {
-        return callbacks.containsKey(characteristicUUID)
+    fun contains(key: K): Boolean {
+        return callbacks.containsKey(key)
     }
 
-    fun add(characteristicUUID: String, callback: (T) -> Unit) {
-        callbacks[characteristicUUID] = callback
+    fun add(key: K, callback: (V) -> Unit) {
+        callbacks[key] = callback
     }
 
-    fun remove(characteristicUUID: String) {
-        callbacks.remove(characteristicUUID)
+    fun remove(key: K) {
+        callbacks.remove(key)
     }
 
     fun clear() {
         callbacks.clear()
     }
 
-    fun notify(characteristicUUID: String, result: T) {
-        callbacks[characteristicUUID]?.invoke(result)
+    fun notify(key: K, result: V) {
+        callbacks[key]?.invoke(result)
     }
 }

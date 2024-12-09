@@ -39,7 +39,7 @@ class BleClient(
     private val requestMtuCallback = CallbackHolder<MtuResult>()
     private val readCallback = CallbackHolder<ReadResult>()
     private val writeCallback = CallbackHolder<Result>()
-    private val notificationCallback = NotificationHolder<NotificationData>()
+    private val notificationCallback = NotificationHolder<UUID, NotificationData>()
 
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
@@ -90,7 +90,7 @@ class BleClient(
         ) {
             val receivedData = String(value)
             logger.debug(TAG, "Received: $receivedData")
-            notificationCallback.notify(characteristic.uuid.toString(), NotificationData(value))
+            notificationCallback.notify(characteristic.uuid, NotificationData(value))
         }
 
         override fun onCharacteristicRead(
@@ -331,8 +331,8 @@ class BleClient(
     }
 
     suspend fun readCharacteristic(
-        serviceUUID: String,
-        characteristicUUID: String,
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
     ): ReadResult {
         return suspendCoroutine { continuation ->
             CoroutineScope(Dispatchers.IO).launch {
@@ -345,8 +345,8 @@ class BleClient(
 
     @SuppressLint("MissingPermission")
     fun readCharacteristic(
-        serviceUUID: String,
-        characteristicUUID: String,
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
         callback: (ReadResult) -> Unit,
     ): Boolean {
         if (bluetoothGatt == null) {
@@ -364,7 +364,7 @@ class BleClient(
         }
 
         bluetoothGatt!!.let { gatt ->
-            val service = gatt.getService(UUID.fromString(serviceUUID))
+            val service = gatt.getService(serviceUUID)
             if (service == null) {
                 val errorMessage = "Service is null."
                 logger.error(TAG, errorMessage)
@@ -372,7 +372,7 @@ class BleClient(
                 return false
             }
 
-            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            val characteristic = service.getCharacteristic(characteristicUUID)
             if (characteristic == null) {
                 val errorMessage = "Characteristic is null."
                 logger.error(TAG, errorMessage)
@@ -395,8 +395,8 @@ class BleClient(
     }
 
     suspend fun writeCharacteristic(
-        serviceUUID: String,
-        characteristicUUID: String,
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
         value: ByteArray,
         writeType: Int,
     ): Result {
@@ -411,8 +411,8 @@ class BleClient(
 
     @SuppressLint("MissingPermission")
     fun writeCharacteristic(
-        serviceUUID: String,
-        characteristicUUID: String,
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
         value: ByteArray,
         writeType: Int,
         callback: (Result) -> Unit,
@@ -432,7 +432,7 @@ class BleClient(
         }
 
         bluetoothGatt!!.let { gatt ->
-            val service = gatt.getService(UUID.fromString(serviceUUID))
+            val service = gatt.getService(serviceUUID)
             if (service == null) {
                 val errorMessage = "Service is null."
                 logger.error(TAG, errorMessage)
@@ -440,7 +440,7 @@ class BleClient(
                 return false
             }
 
-            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            val characteristic = service.getCharacteristic(characteristicUUID)
             if (characteristic == null) {
                 val errorMessage = "Characteristic is null."
                 logger.error(TAG, errorMessage)
@@ -472,8 +472,8 @@ class BleClient(
 
     @SuppressLint("MissingPermission")
     fun enableCharacteristicNotification(
-        serviceUUID: String,
-        characteristicUUID: String,
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
         confirm: Boolean,
         callback: (NotificationData) -> Unit,
     ): Boolean {
@@ -490,14 +490,14 @@ class BleClient(
         }
 
         bluetoothGatt!!.let { gatt ->
-            val service = gatt.getService(UUID.fromString(serviceUUID))
+            val service = gatt.getService(serviceUUID)
             if (service == null) {
                 val errorMessage = "Service is null."
                 logger.error(TAG, errorMessage)
                 return false
             }
 
-            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            val characteristic = service.getCharacteristic(characteristicUUID)
             if (characteristic == null) {
                 val errorMessage = "Characteristic is null."
                 logger.error(TAG, errorMessage)
@@ -511,7 +511,7 @@ class BleClient(
             }
 
             if (!gatt.writeDescriptorCompact(
-                    characteristic.getDescriptor(UUID.fromString(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG)),
+                    characteristic.getDescriptor(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG),
                     if (confirm) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 )
             ) {
@@ -528,8 +528,8 @@ class BleClient(
 
     @SuppressLint("MissingPermission")
     fun disableCharacteristicNotification(
-        serviceUUID: String,
-        characteristicUUID: String,
+        serviceUUID: UUID,
+        characteristicUUID: UUID,
     ): Boolean {
         if (bluetoothGatt == null) {
             val errorMessage = "BluetoothGatt is null."
@@ -544,14 +544,14 @@ class BleClient(
         }
 
         bluetoothGatt!!.let { gatt ->
-            val service = gatt.getService(UUID.fromString(serviceUUID))
+            val service = gatt.getService(serviceUUID)
             if (service == null) {
                 val errorMessage = "Service is null."
                 logger.error(TAG, errorMessage)
                 return false
             }
 
-            val characteristic = service.getCharacteristic(UUID.fromString(characteristicUUID))
+            val characteristic = service.getCharacteristic(characteristicUUID)
             if (characteristic == null) {
                 val errorMessage = "Characteristic is null."
                 logger.error(TAG, errorMessage)
@@ -567,7 +567,7 @@ class BleClient(
             notificationCallback.remove(characteristicUUID)
 
             if (!gatt.writeDescriptorCompact(
-                    characteristic.getDescriptor(UUID.fromString(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG)),
+                    characteristic.getDescriptor(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG),
                     BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
                 )
             ) {

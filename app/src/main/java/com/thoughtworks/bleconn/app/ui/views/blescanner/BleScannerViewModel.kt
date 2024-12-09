@@ -115,7 +115,7 @@ class BleScannerViewModel(
         viewModelScope.launch {
             val filters = listOf(
                 ScanFilter.Builder()
-                    .setServiceUuid(ParcelUuid.fromString(BleUUID.SERVICE))
+                    .setServiceUuid(ParcelUuid(BleUUID.SERVICE))
                     .setManufacturerData(Manufacturer.ID, Manufacturer.data, Manufacturer.dataMask)
                     .build()
             )

@@ -169,7 +169,7 @@ fun BleClientScreen(
                     }
 
                     ServiceView(state.value.services.find<BluetoothGattService> {
-                        it.uuid.toString().lowercase() == BleUUID.SERVICE.lowercase()
+                        it.uuid == BleUUID.SERVICE
                     })
                 }
             }

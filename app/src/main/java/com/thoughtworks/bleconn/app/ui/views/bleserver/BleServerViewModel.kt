@@ -43,7 +43,6 @@ class BleServerViewModel(
         ),
 ) : MVIViewModel<BleServerState, BleServerEvent, BleServerAction>(store) {
     private val navigator = dependency.navigator
-    private val ioDispatcher = dependency.coroutineDispatchers.ioDispatcher
     private val bleServer = dependency.bleServer
     private val bleAdvertiser = dependency.bleAdvertiser
 
@@ -181,7 +180,7 @@ class BleServerViewModel(
 
         val advertiseData = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
-            .addServiceUuid(ParcelUuid.fromString(BleUUID.SERVICE))
+            .addServiceUuid(ParcelUuid(BleUUID.SERVICE))
             .addManufacturerData(Manufacturer.ID, Manufacturer.data)
             .build()
 

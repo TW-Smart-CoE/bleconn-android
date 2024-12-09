@@ -7,7 +7,7 @@ import com.thoughtworks.bleconn.server.descriptor.DescriptorHolder
 import java.util.UUID
 
 class CharacteristicHolder(
-    val uuid: String,
+    val uuid: UUID,
     val properties: Int,
     val permissions: Int,
     val handleReadWrite: (deviceAddress: String, value: ByteArray) -> ReadWriteResult = { _, _ ->
@@ -38,7 +38,7 @@ class CharacteristicHolder(
     }
 
     val characteristic = BluetoothGattCharacteristic(
-        UUID.fromString(uuid),
+        uuid,
         properties,
         permissions,
     )

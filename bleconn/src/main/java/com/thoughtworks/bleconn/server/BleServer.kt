@@ -124,7 +124,7 @@ class BleServer(
     ) {
         val characteristicHolder = serviceHolders
             .flatMap { it.characteristicsHolders }
-            .find { it.uuid.lowercase() == characteristic.uuid.toString().lowercase() }
+            .find { it.uuid == characteristic.uuid }
         characteristicHolder?.let {
             if (offset != 0) {
                 gattServer?.sendResponse(
@@ -166,7 +166,7 @@ class BleServer(
         val descriptorHolders = serviceHolders
             .flatMap { it.characteristicsHolders }
             .flatMap { it.descriptorHolders }
-            .find { it.uuid.lowercase() == descriptor.uuid.toString().lowercase() }
+            .find { it.uuid == descriptor.uuid }
         descriptorHolders?.let {
             if (offset != 0) {
                 gattServer?.sendResponse(
@@ -204,11 +204,11 @@ class BleServer(
         value: ByteArray,
     ) {
         if (value.isNotEmpty()) {
-            if (descriptor.uuid == UUID.fromString(DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG)) {
+            if (descriptor.uuid == DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG) {
                 val characteristic = descriptor.characteristic
                 val characteristicHolder = serviceHolders
                     .flatMap { it.characteristicsHolders }
-                    .find { it.uuid.lowercase() == characteristic.uuid.toString().lowercase() }
+                    .find { it.uuid == characteristic.uuid }
                 characteristicHolder?.let { holder ->
                     synchronized(subscribedDevicesLock) {
                         when {
