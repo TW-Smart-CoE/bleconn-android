@@ -19,6 +19,60 @@ class CallbackHolder<T> {
     }
 }
 
+class KeyCallbackHolder<K, T> {
+    private var key: K? = null
+    private var callback: ((T) -> Unit)? = null
+
+    fun isSet(): Boolean {
+        return callback != null && key != null
+    }
+
+    fun set(key: K, callback: ((T) -> Unit)) {
+        this.key = key
+        this.callback = callback
+    }
+
+    fun getKey(): K? {
+        return key
+    }
+
+    fun resolve(result: T) {
+        callback?.invoke(result)
+        callback = null
+        key = null
+    }
+}
+
+class EnableNotificationCallbackHolder<K, T, N> {
+    private var key: K? = null
+    private var callback: ((T) -> Unit)? = null
+    private var onNotificationDataHandler: ((N) -> Unit)? = null
+
+    fun isSet(): Boolean {
+        return key != null && callback != null && onNotificationDataHandler != null
+    }
+
+    fun set(key: K, callback: ((T) -> Unit), onNotificationData: ((N) -> Unit)) {
+        this.key = key
+        this.callback = callback
+        this.onNotificationDataHandler = onNotificationData
+    }
+
+    fun getKey(): K? {
+        return key
+    }
+
+    fun getOnNotificationDataHandler(): ((N) -> Unit)? {
+        return onNotificationDataHandler
+    }
+
+    fun resolve(result: T) {
+        callback?.invoke(result)
+        callback = null
+        onNotificationDataHandler = null
+    }
+}
+
 class NotificationHolder<K, V> {
     private val callbacks = ConcurrentHashMap<K, (V) -> Unit>()
 

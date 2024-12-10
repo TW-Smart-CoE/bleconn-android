@@ -167,6 +167,12 @@ class BleServerViewModel(
             DescriptorHolder(
                 uuid = DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG,
                 permissions = BluetoothGattCharacteristic.PERMISSION_READ or BluetoothGattCharacteristic.PERMISSION_WRITE,
+                handleReadWrite = { address, value ->
+                    Log.d(TAG, "Descriptor read/write value: ${value.contentToString()}")
+                    DescriptorHolder.ReadWriteResult(
+                        status = GATT_SUCCESS,
+                    )
+                }
             )
         )
     }

@@ -193,7 +193,10 @@ class BleServer(
                 )
             }
 
-            arrangeSubscribedDevices(device, descriptor, value)
+            // write descriptor value and success
+            if (value.isNotEmpty() && result.status == BluetoothGatt.GATT_SUCCESS) {
+                arrangeSubscribedDevices(device, descriptor, value)
+            }
         }
     }
 
@@ -202,39 +205,37 @@ class BleServer(
         descriptor: BluetoothGattDescriptor,
         value: ByteArray,
     ) {
-        if (value.isNotEmpty()) {
-            if (descriptor.uuid == DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG) {
-                val characteristic = descriptor.characteristic
-                val characteristicHolder = serviceHolders
-                    .flatMap { it.characteristicsHolders }
-                    .find { it.uuid == characteristic.uuid }
-                characteristicHolder?.let { holder ->
-                    synchronized(subscribedDevicesLock) {
-                        when {
-                            value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) -> {
-                                logger.debug(
-                                    TAG,
-                                    "Notifications enabled for ${characteristic.uuid}"
-                                )
-                                if (holder.notificationHolder?.subscribedDevices?.find { it.address == device.address } == null) {
-                                    holder.notificationHolder?.subscribedDevices?.add(device)
-                                }
+        if (descriptor.uuid == DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG) {
+            val characteristic = descriptor.characteristic
+            val characteristicHolder = serviceHolders
+                .flatMap { it.characteristicsHolders }
+                .find { it.uuid == characteristic.uuid }
+            characteristicHolder?.let { holder ->
+                synchronized(subscribedDevicesLock) {
+                    when {
+                        value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) -> {
+                            logger.debug(
+                                TAG,
+                                "Notifications enabled for ${characteristic.uuid}"
+                            )
+                            if (holder.notificationHolder?.subscribedDevices?.find { it.address == device.address } == null) {
+                                holder.notificationHolder?.subscribedDevices?.add(device)
                             }
+                        }
 
-                            value.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE) -> {
-                                logger.debug(TAG, "Indications enabled for ${characteristic.uuid}")
-                                if (holder.notificationHolder?.subscribedDevices?.find { it.address == device.address } == null) {
-                                    holder.notificationHolder?.subscribedDevices?.add(device)
-                                }
+                        value.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE) -> {
+                            logger.debug(TAG, "Indications enabled for ${characteristic.uuid}")
+                            if (holder.notificationHolder?.subscribedDevices?.find { it.address == device.address } == null) {
+                                holder.notificationHolder?.subscribedDevices?.add(device)
                             }
+                        }
 
-                            value.contentEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) -> {
-                                logger.debug(
-                                    TAG,
-                                    "Notifications/Indications disabled for ${characteristic.uuid}"
-                                )
-                                holder.notificationHolder?.subscribedDevices?.remove(device)
-                            }
+                        value.contentEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) -> {
+                            logger.debug(
+                                TAG,
+                                "Notifications/Indications disabled for ${characteristic.uuid}"
+                            )
+                            holder.notificationHolder?.subscribedDevices?.remove(device)
                         }
                     }
                 }
@@ -290,7 +291,8 @@ class BleServer(
                                             currentTime % notificationHolder.intervalSeconds == 0L
                                         ) {
                                             notificationHolder.subscribedDevices.forEach { device ->
-                                                val data = notificationHolder.handleNotification(device.address)
+                                                val data =
+                                                    notificationHolder.handleNotification(device.address)
                                                 sendNotification(
                                                     device,
                                                     characteristicHolder.characteristic,
