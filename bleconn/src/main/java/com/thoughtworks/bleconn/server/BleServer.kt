@@ -19,7 +19,6 @@ import com.thoughtworks.bleconn.utils.logger.debug
 import com.thoughtworks.bleconn.utils.logger.error
 import java.util.Timer
 import java.util.TimerTask
-import java.util.UUID
 
 class BleServer(
     private val context: Context,
@@ -290,8 +289,8 @@ class BleServer(
                                         if (notificationHolder.intervalSeconds > 0 &&
                                             currentTime % notificationHolder.intervalSeconds == 0L
                                         ) {
-                                            val data = notificationHolder.handleNotification()
                                             notificationHolder.subscribedDevices.forEach { device ->
+                                                val data = notificationHolder.handleNotification(device.address)
                                                 sendNotification(
                                                     device,
                                                     characteristicHolder.characteristic,
@@ -325,7 +324,8 @@ class BleServer(
             return
         }
 
-        val confirm = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
+        val confirm =
+            characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
         if (!gattServer!!.notifyCharacteristicChangedCompact(
                 device,
                 characteristic,

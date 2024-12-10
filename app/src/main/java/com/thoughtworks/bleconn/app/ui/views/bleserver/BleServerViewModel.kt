@@ -148,7 +148,7 @@ class BleServerViewModel(
                 permissions = BluetoothGattCharacteristic.PERMISSION_READ,
                 descriptorHolders = buildDeviceStatusDescriptors(),
                 notificationHolder = CharacteristicHolder.NotificationHolder(
-                    handleNotification = {
+                    handleNotification = { address ->
                         Log.d(TAG, "Notification value")
                         val dateFormat =
                             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())

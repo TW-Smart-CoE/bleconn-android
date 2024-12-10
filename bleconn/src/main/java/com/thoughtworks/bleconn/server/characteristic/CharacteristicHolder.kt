@@ -19,7 +19,7 @@ class CharacteristicHolder(
     val notificationHolder: NotificationHolder? = null,
 ) {
     class NotificationHolder(
-        val handleNotification: () -> ByteArray,
+        val handleNotification: (deviceAddress: String) -> ByteArray,
         val intervalSeconds: Int = 0,
         val subscribedDevices: MutableSet<BluetoothDevice> = mutableSetOf(),
     )
