@@ -9,6 +9,7 @@ import com.thoughtworks.bleconn.app.foundation.mvi.model.State
 data class BleClientState(
     val isConnected: Boolean = false,
     val mtu: String = "default",
+    val notification: String = "",
     val services: List<BluetoothGattService> = emptyList(),
 ) : State
 
@@ -26,4 +27,5 @@ sealed interface BleClientAction : Action {
     data class RequestMtu(val mtu: Int) : BleClientAction
     data class WriteWiFiConfig(val ssid: String, val password: String) : BleClientAction
     data class OnMtuUpdated(val mtu: Int) : BleClientAction
+    data class OnNotification(val notification: String) : BleClientAction
 }

@@ -168,6 +168,13 @@ fun BleClientScreen(
                         Text(context.getString(R.string.disable_notification))
                     }
 
+                    Text(
+                        modifier = Modifier
+                            .padding(top = 8.dp),
+                        text = "Notification: ${state.value.notification}",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
                     ServiceView(state.value.services.find<BluetoothGattService> {
                         it.uuid == BleUUID.SERVICE
                     })

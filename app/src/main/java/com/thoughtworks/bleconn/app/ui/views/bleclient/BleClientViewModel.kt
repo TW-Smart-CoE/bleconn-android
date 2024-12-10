@@ -67,6 +67,12 @@ class BleClientViewModel(
                 )
             }
 
+            is BleClientAction.OnNotification -> {
+                currentState.copy(
+                    notification = action.notification,
+                )
+            }
+
             else -> {
                 currentState
             }
@@ -141,6 +147,7 @@ class BleClientViewModel(
                 true,
             ) {
                 Log.d(TAG, "Notification data arrived: ${String(it.value)}")
+                sendAction(BleClientAction.OnNotification(String(it.value)))
             }
 
             val message = if (result.isSuccess) {
