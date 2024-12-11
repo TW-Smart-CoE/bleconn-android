@@ -9,7 +9,9 @@ data class BleServerState(
     val isStarted: Boolean = false,
 ) : State
 
-sealed interface BleServerEvent : Event
+sealed interface BleServerEvent : Event {
+    data class ShowToast(val text: String, val isLong: Boolean = false) : BleServerEvent
+}
 
 sealed interface BleServerAction : Action {
     data object NavigateBack: BleServerAction

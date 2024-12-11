@@ -245,6 +245,11 @@ class BleServer(
 
     @SuppressLint("MissingPermission")
     fun start(serviceHolders: List<ServiceHolder>): Boolean {
+        if (!bluetoothManager.adapter.isEnabled) {
+            logger.error(TAG, "Bluetooth is not enabled")
+            return false
+        }
+
         gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
         gattServer?.apply {
             serviceHolders.forEach { serviceWrapper ->

@@ -7,14 +7,17 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import com.thoughtworks.bleconn.utils.logger.DefaultLogger
+import com.thoughtworks.bleconn.utils.logger.Logger
+import com.thoughtworks.bleconn.utils.logger.error
 
 class BleScanner(
     context: Context,
+    private val logger: Logger = DefaultLogger(),
 ) {
     private val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
-    private val scanner = bluetoothAdapter.bluetoothLeScanner
     private var scanCallback: ScanCallback? = null
 
     @SuppressLint("MissingPermission")
@@ -23,7 +26,20 @@ class BleScanner(
         settings: ScanSettings,
         onFound: (result: ScanResult) -> Unit,
         onError: (errorCode: Int) -> Unit = {},
-    ) {
+    ): Boolean {
+        if (!bluetoothAdapter.isEnabled) {
+            logger.error(TAG, "Bluetooth is not enabled")
+            onError(ScanCallback.SCAN_FAILED_INTERNAL_ERROR)
+            return false
+        }
+
+        val scanner = bluetoothAdapter.bluetoothLeScanner
+        if (scanner == null) {
+            logger.error(TAG, "Failed to get scanner")
+            onError(ScanCallback.SCAN_FAILED_INTERNAL_ERROR)
+            return false
+        }
+
         scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 onFound(result)
@@ -41,12 +57,13 @@ class BleScanner(
         }
 
         scanner.startScan(filters, settings, scanCallback)
+        return true
     }
 
     @SuppressLint("MissingPermission")
     fun stop() {
         scanCallback?.let {
-            scanner.stopScan(it)
+            bluetoothAdapter.bluetoothLeScanner?.stopScan(it)
             scanCallback = null
         }
     }

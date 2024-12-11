@@ -1,5 +1,6 @@
 package com.thoughtworks.bleconn.app.ui.views.bleserver
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +16,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -24,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.thoughtworks.bleconn.app.R
 import com.thoughtworks.bleconn.app.di.Dependency
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +37,8 @@ fun BleServerScreen(dependency: Dependency) {
     val viewModel: BleServerViewModel = viewModel(factory = factory)
     val state = viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val event = viewModel.uiEvent
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -98,4 +105,18 @@ fun BleServerScreen(dependency: Dependency) {
             }
         }
     )
+
+    LaunchedEffect(Unit) {
+        event.onEach { event ->
+            when (event) {
+                is BleServerEvent.ShowToast -> {
+                    Toast.makeText(
+                        context,
+                        event.text,
+                        if (event.isLong) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }.launchIn(scope)
+    }
 }

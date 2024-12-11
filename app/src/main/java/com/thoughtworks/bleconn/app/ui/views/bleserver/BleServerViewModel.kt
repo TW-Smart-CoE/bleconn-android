@@ -42,6 +42,7 @@ class BleServerViewModel(
             )
         ),
 ) : MVIViewModel<BleServerState, BleServerEvent, BleServerAction>(store) {
+    private val ioDispatcher = dependency.coroutineDispatchers.ioDispatcher
     private val navigator = dependency.navigator
     private val bleServer = dependency.bleServer
     private val bleAdvertiser = dependency.bleAdvertiser
@@ -94,11 +95,15 @@ class BleServerViewModel(
     }
 
     private fun bleServerStartAsync() {
-        viewModelScope.launch {
+        viewModelScope.launch(ioDispatcher) {
             if (startServer()) {
                 startAdvertiser()
             } else {
-                Log.e(TAG, "Failed to start server")
+                val errorMessage = "Failed to start server"
+                Log.e(TAG, errorMessage)
+                sendEvent(BleServerEvent.ShowToast(errorMessage))
+
+                sendAction(BleServerAction.Stop)
             }
         }
     }
@@ -194,12 +199,13 @@ class BleServerViewModel(
         if (result == ADVERTISE_SUCCESS) {
             Log.d(TAG, "Advertising started successfully")
         } else {
-            Log.e(
-                TAG,
-                "Advertising failed with error code: $result, message: ${
-                    advertiseErrorMessage(result)
-                }"
-            )
+            val errorMessage = "Advertising failed with error code: $result, message: ${
+                advertiseErrorMessage(result)
+            }"
+            Log.e(TAG, errorMessage)
+            sendEvent(BleServerEvent.ShowToast(errorMessage))
+
+            sendAction(BleServerAction.Stop)
         }
     }
 

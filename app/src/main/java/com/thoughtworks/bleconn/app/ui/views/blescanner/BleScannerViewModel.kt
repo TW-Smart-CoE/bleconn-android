@@ -27,6 +27,7 @@ class BleScannerViewModel(
             )
         ),
 ) : MVIViewModel<BleScannerState, BleScannerEvent, BleScannerAction>(store) {
+    private val ioDispatcher = dependency.coroutineDispatchers.ioDispatcher
     private val navigator = dependency.navigator
     private val bleScanner = dependency.bleScanner
 
@@ -99,11 +100,11 @@ class BleScannerViewModel(
             }
 
             is BleScannerAction.StopScan -> {
-                bleScannerStopAsync()
+                bleScannerStop()
             }
 
             is BleScannerAction.ConnectToDevice -> {
-                bleScannerStopAsync()
+                bleScannerStop()
                 navigator.navigateToBleClientScreen(action.address)
             }
 
@@ -112,7 +113,7 @@ class BleScannerViewModel(
     }
 
     private fun bleScannerStartAsync() {
-        viewModelScope.launch {
+        viewModelScope.launch(ioDispatcher) {
             val filters = listOf(
                 ScanFilter.Builder()
                     .setServiceUuid(ParcelUuid(BleUUID.SERVICE))
@@ -134,16 +135,18 @@ class BleScannerViewModel(
             ) { errorCode ->
                 Log.e(TAG, "Scan failed with error code: $errorCode")
                 sendEvent(BleScannerEvent.ShowToast("Scan failed with error code: $errorCode"))
+
+                sendAction(BleScannerAction.StopScan)
             }
         }
     }
 
-    private fun bleScannerStopAsync() {
+    private fun bleScannerStop() {
         bleScanner.stop()
     }
 
     override fun onCleared() {
-        bleScannerStopAsync()
+        bleScannerStop()
     }
 
     companion object {

@@ -93,8 +93,7 @@ class BleClient(
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
-            logger.debug(TAG, "onCharacteristicChanged: ${characteristic.uuid}")
-            notificationManager.notify(characteristic.uuid, NotificationData(value))
+            handleOnCharacteristicChanged(characteristic, value)
         }
 
         // deprecated callback method, for lower sdk
@@ -102,8 +101,7 @@ class BleClient(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
         ) {
-            logger.debug(TAG, "onCharacteristicChanged: ${characteristic.uuid}")
-            notificationManager.notify(characteristic.uuid, NotificationData(characteristic.value))
+            handleOnCharacteristicChanged(characteristic, characteristic.value)
         }
 
         override fun onCharacteristicRead(
@@ -112,60 +110,16 @@ class BleClient(
             value: ByteArray,
             status: Int,
         ) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                logger.debug(TAG, "Characteristic read successfully.")
-                readCallback.getKey()?.let { key ->
-                    if (key == characteristic.uuid) {
-                        readCallback.resolve(
-                            ReadResult(isSuccess = true, value = value)
-                        )
-                    }
-                }
-            } else {
-                val errorMessage = "Characteristic read failed with status: $status"
-                logger.debug(TAG, errorMessage)
-                readCallback.getKey()?.let { key ->
-                    if (key == characteristic.uuid) {
-                        readCallback.resolve(
-                            ReadResult(
-                                isSuccess = false,
-                                errorMessage = errorMessage
-                            )
-                        )
-                    }
-                }
-            }
+            handleOnCharacteristicRead(status, characteristic, value)
         }
 
         // deprecated callback method, for lower sdk
         override fun onCharacteristicRead(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
-            status: Int
+            status: Int,
         ) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                logger.debug(TAG, "Characteristic read successfully.")
-                readCallback.getKey()?.let { key ->
-                    if (key == characteristic.uuid) {
-                        readCallback.resolve(
-                            ReadResult(isSuccess = true, value = characteristic.value)
-                        )
-                    }
-                }
-            } else {
-                val errorMessage = "Characteristic read failed with status: $status"
-                logger.debug(TAG, errorMessage)
-                readCallback.getKey()?.let { key ->
-                    if (key == characteristic.uuid) {
-                        readCallback.resolve(
-                            ReadResult(
-                                isSuccess = false,
-                                errorMessage = errorMessage
-                            )
-                        )
-                    }
-                }
-            }
+            handleOnCharacteristicRead(status, characteristic, characteristic.value)
         }
 
         override fun onCharacteristicWrite(
@@ -220,24 +174,16 @@ class BleClient(
             status: Int,
             value: ByteArray,
         ) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                logger.debug(TAG, "Descriptor read successfully.")
-            } else {
-                logger.error(TAG, "Descriptor read failed with status: $status")
-            }
+            handleOnDescriptorRead(status)
         }
 
         // deprecated callback method, for lower sdk
         override fun onDescriptorRead(
             gatt: BluetoothGatt?,
             descriptor: BluetoothGattDescriptor?,
-            status: Int
+            status: Int,
         ) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                logger.debug(TAG, "Descriptor read successfully.")
-            } else {
-                logger.error(TAG, "Descriptor read failed with status: $status")
-            }
+            handleOnDescriptorRead(status)
         }
 
         override fun onDescriptorWrite(
@@ -255,6 +201,52 @@ class BleClient(
                 logger.error(TAG, errorMessage)
                 if (descriptor.uuid == DescriptorUUID.CLIENT_CHARACTERISTIC_CONFIG) {
                     handleNotificationSetFailed(descriptor, errorMessage)
+                }
+            }
+        }
+    }
+
+    private fun handleOnCharacteristicChanged(
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray,
+    ) {
+        logger.debug(TAG, "onCharacteristicChanged: ${characteristic.uuid}")
+        notificationManager.notify(characteristic.uuid, NotificationData(value))
+    }
+
+    private fun handleOnDescriptorRead(status: Int) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            logger.debug(TAG, "Descriptor read successfully.")
+        } else {
+            logger.error(TAG, "Descriptor read failed with status: $status")
+        }
+    }
+
+    private fun handleOnCharacteristicRead(
+        status: Int,
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray,
+    ) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            logger.debug(TAG, "Characteristic read successfully.")
+            readCallback.getKey()?.let { key ->
+                if (key == characteristic.uuid) {
+                    readCallback.resolve(
+                        ReadResult(isSuccess = true, value = value)
+                    )
+                }
+            }
+        } else {
+            val errorMessage = "Characteristic read failed with status: $status"
+            logger.debug(TAG, errorMessage)
+            readCallback.getKey()?.let { key ->
+                if (key == characteristic.uuid) {
+                    readCallback.resolve(
+                        ReadResult(
+                            isSuccess = false,
+                            errorMessage = errorMessage
+                        )
+                    )
                 }
             }
         }
@@ -330,9 +322,16 @@ class BleClient(
 
     fun connect(
         deviceAddress: String,
-        onConnectStateChanged: ((Boolean) -> Unit),
+        onConnectStateChanged: (Boolean) -> Unit,
         callback: (Result) -> Unit,
     ): Boolean {
+        if (!bluetoothAdapter.isEnabled) {
+            val errorMessage = "Bluetooth is not enabled."
+            logger.error(TAG, errorMessage)
+            callback(Result(errorMessage = errorMessage))
+            return false
+        }
+
         if (connectCallback.isSet()) {
             val errorMessage = "Another connection is in progress."
             logger.error(TAG, errorMessage)

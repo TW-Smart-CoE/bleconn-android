@@ -23,7 +23,6 @@ class BleAdvertiser(
     private val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
-    private val advertiser = bluetoothAdapter.bluetoothLeAdvertiser
     private var advertiseCallback: AdvertiseCallback? = null
 
     @SuppressLint("MissingPermission")
@@ -31,8 +30,22 @@ class BleAdvertiser(
         settings: AdvertiseSettings,
         data: AdvertiseData,
         callback: AdvertiseCallback,
-    ) {
+    ): Boolean {
+        if (!bluetoothAdapter.isEnabled) {
+            logger.error(TAG, "Bluetooth is not enabled")
+            callback.onStartFailure(AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR)
+            return false
+        }
+
+        val advertiser = bluetoothAdapter.bluetoothLeAdvertiser
+        if (advertiser == null) {
+            logger.error(TAG, "Failed to get advertiser")
+            callback.onStartFailure(AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR)
+            return false
+        }
+
         advertiser.startAdvertising(settings, data, callback)
+        return true
     }
 
     suspend fun start(
@@ -71,7 +84,7 @@ class BleAdvertiser(
     @SuppressLint("MissingPermission")
     fun stop() {
         advertiseCallback?.let {
-            advertiser.stopAdvertising(it)
+            bluetoothAdapter.bluetoothLeAdvertiser?.stopAdvertising(it)
             advertiseCallback = null
         }
     }
