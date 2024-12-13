@@ -24,7 +24,7 @@ class DependencyImpl(
     private val _bleServer = BleServer(context, _bleLogger)
     private val _bleClient = BleClient(context, _bleLogger)
     private val _bleAdvertiser = BleAdvertiser(context, _bleLogger)
-    private val _bleScanner = BleScanner(context)
+    private val _bleScanner = BleScanner(context, _bleLogger)
 
     override fun setNavigator(navigator: Navigator) {
         _navigator = navigator

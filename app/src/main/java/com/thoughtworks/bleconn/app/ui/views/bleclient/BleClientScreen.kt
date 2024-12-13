@@ -105,7 +105,7 @@ fun BleClientScreen(
 
                     Button(
                         onClick = {
-                            viewModel.sendAction(BleClientAction.RequestMtu(256))
+                            viewModel.sendAction(BleClientAction.RequestMtu(512))
                         },
                         enabled = state.value.services.isNotEmpty(),
                         modifier = Modifier
