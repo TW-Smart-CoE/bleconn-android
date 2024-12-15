@@ -38,6 +38,7 @@ class BleServer(
                 logger.debug(TAG, "Device connected: ${device.address}")
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 logger.debug(TAG, "Device disconnected: ${device.address}")
+                removeDisconnectDeviceNotification(device)
             }
         }
 
@@ -109,6 +110,18 @@ class BleServer(
             } else {
                 logger.error(TAG, "onNotificationSent failed with status: $status")
             }
+        }
+    }
+
+    private fun removeDisconnectDeviceNotification(device: BluetoothDevice) {
+        synchronized(subscribedDevicesLock) {
+            serviceHolders
+                .flatMap { it.characteristicsHolders }
+                .forEach { characteristicHolder ->
+                    if (characteristicHolder.notificationHolder?.subscribedDevices?.remove(device) == true) {
+                        logger.debug(TAG, "Remove device(${device.address}) from notification list")
+                    }
+                }
         }
     }
 
@@ -295,14 +308,30 @@ class BleServer(
                                         if (notificationHolder.intervalSeconds > 0 &&
                                             currentTime % notificationHolder.intervalSeconds == 0L
                                         ) {
+                                            val tobeRemoved = mutableListOf<BluetoothDevice>()
                                             notificationHolder.subscribedDevices.forEach { device ->
                                                 val data =
                                                     notificationHolder.handleNotification(device.address)
-                                                sendNotification(
-                                                    device,
-                                                    characteristicHolder.characteristic,
-                                                    data
+                                                try {
+                                                    sendNotification(
+                                                        device,
+                                                        characteristicHolder.characteristic,
+                                                        data
+                                                    )
+                                                } catch (t: Throwable) {
+                                                    logger.error(
+                                                        TAG,
+                                                        "Failed to send notification. ${t.message}"
+                                                    )
+                                                    tobeRemoved.add(device)
+                                                }
+                                            }
+                                            if (tobeRemoved.isNotEmpty()) {
+                                                logger.debug(
+                                                    TAG,
+                                                    "Remove devices: ${tobeRemoved.joinToString { it.address }}"
                                                 )
+                                                notificationHolder.subscribedDevices.removeAll(tobeRemoved)
                                             }
                                         }
                                     }
