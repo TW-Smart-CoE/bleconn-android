@@ -17,6 +17,10 @@ class CallbackHolder<T> {
         callback?.invoke(result)
         callback = null
     }
+
+    fun clear() {
+        callback = null
+    }
 }
 
 class KeyCallbackHolder<K, T> {

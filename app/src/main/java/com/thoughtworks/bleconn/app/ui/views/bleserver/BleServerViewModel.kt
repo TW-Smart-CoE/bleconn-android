@@ -1,5 +1,6 @@
 package com.thoughtworks.bleconn.app.ui.views.bleserver
 
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothGatt.GATT_SUCCESS
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
@@ -27,6 +28,7 @@ import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder
 import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder.ReadWriteResult
 import com.thoughtworks.bleconn.server.descriptor.DescriptorHolder
 import com.thoughtworks.bleconn.server.service.ServiceHolder
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -46,6 +48,28 @@ class BleServerViewModel(
     private val navigator = dependency.navigator
     private val bleServer = dependency.bleServer
     private val bleAdvertiser = dependency.bleAdvertiser
+    private val bluetoothStateMonitor = dependency.bluetoothStateMonitor
+
+    init {
+        bluetoothStateMonitor.start {
+            onBluetoothStateChanged(it)
+        }
+    }
+
+    private fun onBluetoothStateChanged(state: Int) {
+        if (state == BluetoothAdapter.STATE_ON) {
+            Log.d(TAG, "state == BluetoothAdapter.STATE_ON")
+            if (bleServer.isStarted() || bleAdvertiser.isStarted()) {
+                viewModelScope.launch(ioDispatcher) {
+                    Log.d(TAG, "Restarting BLE server and advertiser")
+                    delay(500)
+                    sendAction(BleServerAction.Stop)
+                    delay(500)
+                    sendAction(BleServerAction.Start)
+                }
+            }
+        }
+    }
 
     override fun reduce(
         currentState: BleServerState,
@@ -90,6 +114,7 @@ class BleServerViewModel(
     }
 
     private fun bleServerStop() {
+        bluetoothStateMonitor.stop()
         bleAdvertiser.stop()
         bleServer.stop()
     }

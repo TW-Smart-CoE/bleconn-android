@@ -307,6 +307,10 @@ class BleClient(
         }
     }
 
+    fun isConnected(): Boolean {
+        return bluetoothGatt != null
+    }
+
     suspend fun connect(
         deviceAddress: String,
         onConnectStateChanged: (Boolean) -> Unit,

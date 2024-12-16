@@ -25,6 +25,10 @@ class BleAdvertiser(
     private val bluetoothAdapter = bluetoothManager.adapter
     private var advertiseCallback: AdvertiseCallback? = null
 
+    fun isStarted(): Boolean {
+        return advertiseCallback != null
+    }
+
     @SuppressLint("MissingPermission")
     private fun start(
         settings: AdvertiseSettings,

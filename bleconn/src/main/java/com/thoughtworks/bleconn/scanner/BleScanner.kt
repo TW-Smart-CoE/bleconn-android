@@ -20,6 +20,10 @@ class BleScanner(
     private val bluetoothAdapter = bluetoothManager.adapter
     private var scanCallback: ScanCallback? = null
 
+    fun isStarted(): Boolean {
+        return scanCallback != null
+    }
+
     @SuppressLint("MissingPermission")
     fun start(
         filters: List<ScanFilter>,

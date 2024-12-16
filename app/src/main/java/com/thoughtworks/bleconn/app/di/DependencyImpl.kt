@@ -7,6 +7,7 @@ import com.thoughtworks.bleconn.app.foundation.dispatcher.CoroutineDispatchers
 import com.thoughtworks.bleconn.client.BleClient
 import com.thoughtworks.bleconn.scanner.BleScanner
 import com.thoughtworks.bleconn.server.BleServer
+import com.thoughtworks.bleconn.utils.BluetoothStateMonitor
 import com.thoughtworks.bleconn.utils.logger.DefaultLogger
 import com.thoughtworks.bleconn.utils.navigator.Navigator
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,7 @@ class DependencyImpl(
     private val _bleClient = BleClient(context, _bleLogger)
     private val _bleAdvertiser = BleAdvertiser(context, _bleLogger)
     private val _bleScanner = BleScanner(context, _bleLogger)
+    private val _bluetoothStateMonitor = BluetoothStateMonitor(context, _bleLogger)
 
     override fun setNavigator(navigator: Navigator) {
         _navigator = navigator
@@ -53,4 +55,7 @@ class DependencyImpl(
 
     override val bleScanner: BleScanner
         get() = _bleScanner
+
+    override val bluetoothStateMonitor: BluetoothStateMonitor
+        get() = _bluetoothStateMonitor
 }

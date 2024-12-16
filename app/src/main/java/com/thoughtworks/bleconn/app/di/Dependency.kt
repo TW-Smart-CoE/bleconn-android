@@ -6,6 +6,7 @@ import com.thoughtworks.bleconn.app.foundation.dispatcher.CoroutineDispatchers
 import com.thoughtworks.bleconn.client.BleClient
 import com.thoughtworks.bleconn.scanner.BleScanner
 import com.thoughtworks.bleconn.server.BleServer
+import com.thoughtworks.bleconn.utils.BluetoothStateMonitor
 import com.thoughtworks.bleconn.utils.navigator.Navigator
 import kotlinx.coroutines.CoroutineScope
 
@@ -20,4 +21,5 @@ interface Dependency {
     val bleClient: BleClient
     val bleAdvertiser: BleAdvertiser
     val bleScanner: BleScanner
+    val bluetoothStateMonitor: BluetoothStateMonitor
 }
