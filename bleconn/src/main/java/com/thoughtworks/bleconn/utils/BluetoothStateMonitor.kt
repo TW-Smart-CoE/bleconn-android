@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import com.thoughtworks.bleconn.utils.logger.DefaultLogger
 import com.thoughtworks.bleconn.utils.logger.Logger
 import com.thoughtworks.bleconn.utils.logger.debug
+import com.thoughtworks.bleconn.utils.logger.error
 
 class BluetoothStateMonitor(
     private val context: Context,
@@ -34,22 +35,38 @@ class BluetoothStateMonitor(
         }
     }
 
-    fun start(callback: (Int) -> Unit) {
+    fun start(callback: (Int) -> Unit): Boolean {
         if (callbackHolder.isSet()) {
             logger.debug(TAG, "Callback is already set")
-            return
+            return false
         }
 
+        logger.debug(TAG, "Start monitoring Bluetooth state")
         callbackHolder.set(callback)
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-        context.registerReceiver(bluetoothReceiver, filter)
+
+        return try {
+            val result = context.registerReceiver(bluetoothReceiver, filter)
+            if (result == null) {
+                logger.error(TAG, "Failed to register receiver")
+                callbackHolder.clear()
+                false
+            } else {
+                true
+            }
+        } catch (e: Throwable) {
+            logger.error(TAG, "Receiver is already registered")
+            callbackHolder.clear()
+            false
+        }
     }
 
     fun stop() {
+        logger.debug(TAG, "Stop monitoring Bluetooth state")
         try {
             context.unregisterReceiver(bluetoothReceiver)
         } catch (e: IllegalArgumentException) {
-            logger.debug(TAG, "Receiver is not registered")
+            logger.error(TAG, "Receiver is not registered")
         }
         callbackHolder.clear()
     }

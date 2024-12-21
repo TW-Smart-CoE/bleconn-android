@@ -58,7 +58,6 @@ class BleServerViewModel(
 
     private fun onBluetoothStateChanged(state: Int) {
         if (state == BluetoothAdapter.STATE_ON) {
-            Log.d(TAG, "state == BluetoothAdapter.STATE_ON")
             if (bleServer.isStarted() || bleAdvertiser.isStarted()) {
                 viewModelScope.launch(ioDispatcher) {
                     Log.d(TAG, "Restarting BLE server and advertiser")
@@ -114,7 +113,6 @@ class BleServerViewModel(
     }
 
     private fun bleServerStop() {
-        bluetoothStateMonitor.stop()
         bleAdvertiser.stop()
         bleServer.stop()
     }
@@ -235,6 +233,7 @@ class BleServerViewModel(
     }
 
     override fun onCleared() {
+        bluetoothStateMonitor.stop()
         bleServerStop()
     }
 
