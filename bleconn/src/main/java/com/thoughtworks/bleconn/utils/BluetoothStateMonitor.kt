@@ -14,7 +14,7 @@ class BluetoothStateMonitor(
     private val context: Context,
     private val logger: Logger = DefaultLogger(),
 ) {
-    val callbackHolder: CallbackHolder<Int> = CallbackHolder()
+    var listener: ((Int) -> Unit)? = null
 
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -30,33 +30,27 @@ class BluetoothStateMonitor(
                         logger.debug(TAG, "Bluetooth is ON")
                     }
                 }
-                callbackHolder.resolve(state)
+                listener?.invoke(state)
             }
         }
     }
 
-    fun start(callback: (Int) -> Unit): Boolean {
-        if (callbackHolder.isSet()) {
+    fun start(listener: (Int) -> Unit): Boolean {
+        if (this.listener != null) {
             logger.debug(TAG, "Callback is already set")
             return false
         }
 
         logger.debug(TAG, "Start monitoring Bluetooth state")
-        callbackHolder.set(callback)
+        this.listener = listener
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
 
         return try {
-            val result = context.registerReceiver(bluetoothReceiver, filter)
-            if (result == null) {
-                logger.error(TAG, "Failed to register receiver")
-                callbackHolder.clear()
-                false
-            } else {
-                true
-            }
+            context.registerReceiver(bluetoothReceiver, filter)
+            return true
         } catch (e: Throwable) {
-            logger.error(TAG, "Receiver is already registered")
-            callbackHolder.clear()
+            logger.error(TAG, e.message.toString())
+            this.listener = null
             false
         }
     }
@@ -66,9 +60,9 @@ class BluetoothStateMonitor(
         try {
             context.unregisterReceiver(bluetoothReceiver)
         } catch (e: IllegalArgumentException) {
-            logger.error(TAG, "Receiver is not registered")
+            logger.error(TAG, e.message.toString())
         }
-        callbackHolder.clear()
+        this.listener = null
     }
 
     companion object {
