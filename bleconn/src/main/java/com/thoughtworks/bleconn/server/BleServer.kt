@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.os.SystemClock
 import com.thoughtworks.bleconn.definitions.DescriptorUUID
 import com.thoughtworks.bleconn.server.service.ServiceHolder
 import com.thoughtworks.bleconn.utils.GattUtils.notifyCharacteristicChangedCompact
@@ -270,11 +271,15 @@ class BleServer(
         gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
         gattServer?.apply {
             serviceHolders.forEach { serviceWrapper ->
+                logger.debug(TAG, "Add service: ${serviceWrapper.service.uuid}")
                 if (!addService(serviceWrapper.service)) {
+                    logger.debug(TAG, "Failed to add service: ${serviceWrapper.service.uuid}")
                     stop()
                     return false
                 }
             }
+
+            SystemClock.sleep(10)
 
             services.forEach {
                 logger.debug(TAG, "Service: ${it.uuid}")

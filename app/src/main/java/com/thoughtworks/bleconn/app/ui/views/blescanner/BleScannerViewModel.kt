@@ -76,7 +76,7 @@ class BleScannerViewModel(
                 )
             existingManufacturerData != null && existingManufacturerData.contentEquals(
                 newManufacturerData
-            )
+            ) && scanResult.device.address == action.scanResult.device.address
         }
 
         if (index >= 0) {

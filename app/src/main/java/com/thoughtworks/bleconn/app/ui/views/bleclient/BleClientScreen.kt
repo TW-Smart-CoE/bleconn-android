@@ -105,6 +105,17 @@ fun BleClientScreen(
 
                     Button(
                         onClick = {
+                            viewModel.sendAction(BleClientAction.DiscoverServices)
+                        },
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        Text(context.getString(R.string.discover_services))
+                    }
+
+                    Button(
+                        onClick = {
                             viewModel.sendAction(BleClientAction.RequestMtu(256))
                         },
                         enabled = state.value.services.isNotEmpty(),

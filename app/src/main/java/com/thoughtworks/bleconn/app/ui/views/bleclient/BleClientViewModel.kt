@@ -92,6 +92,10 @@ class BleClientViewModel(
                 discoverServicesAsync(action.isConnected)
             }
 
+            is BleClientAction.DiscoverServices -> {
+                discoverServicesAsync(currentState.isConnected)
+            }
+
             is BleClientAction.RequestMtu -> {
                 requestMtuAsync(action.mtu)
             }

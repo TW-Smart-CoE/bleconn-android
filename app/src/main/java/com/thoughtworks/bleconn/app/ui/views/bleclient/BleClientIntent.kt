@@ -24,6 +24,7 @@ sealed interface BleClientAction : Action {
     data object DisableNotification : BleClientAction
     data class ConnectStatusChanged(val isConnected: Boolean) : BleClientAction
     data class OnServicesDiscovered(val services: List<BluetoothGattService>): BleClientAction
+    data object DiscoverServices : BleClientAction
     data class RequestMtu(val mtu: Int) : BleClientAction
     data class WriteWiFiConfig(val ssid: String, val password: String) : BleClientAction
     data class OnMtuUpdated(val mtu: Int) : BleClientAction
