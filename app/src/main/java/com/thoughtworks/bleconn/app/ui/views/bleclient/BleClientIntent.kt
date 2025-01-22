@@ -11,6 +11,7 @@ data class BleClientState(
     val mtu: String = "default",
     val notification: String = "",
     val services: List<BluetoothGattService> = emptyList(),
+    val requestMtu: Int = 256,
 ) : State
 
 sealed interface BleClientEvent : Event {
@@ -25,8 +26,9 @@ sealed interface BleClientAction : Action {
     data class ConnectStatusChanged(val isConnected: Boolean) : BleClientAction
     data class OnServicesDiscovered(val services: List<BluetoothGattService>): BleClientAction
     data object DiscoverServices : BleClientAction
-    data class RequestMtu(val mtu: Int) : BleClientAction
+    data object RequestMtu : BleClientAction
     data class WriteWiFiConfig(val ssid: String, val password: String) : BleClientAction
     data class OnMtuUpdated(val mtu: Int) : BleClientAction
     data class OnNotification(val notification: String) : BleClientAction
+    data class UpdateRequestMtu(val number: Int) : BleClientAction
 }

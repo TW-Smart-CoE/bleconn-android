@@ -61,6 +61,12 @@ class BleClientViewModel(
                 )
             }
 
+            is BleClientAction.UpdateRequestMtu -> {
+                currentState.copy(
+                    requestMtu = action.number,
+                )
+            }
+
             is BleClientAction.OnMtuUpdated -> {
                 currentState.copy(
                     mtu = action.mtu.toString(),
@@ -97,7 +103,7 @@ class BleClientViewModel(
             }
 
             is BleClientAction.RequestMtu -> {
-                requestMtuAsync(action.mtu)
+                requestMtuAsync()
             }
 
             is BleClientAction.ReadDeviceInfo -> {
@@ -208,9 +214,9 @@ class BleClientViewModel(
         }
     }
 
-    private fun requestMtuAsync(mtu: Int) {
+    private fun requestMtuAsync() {
         viewModelScope.launch(ioDispatcher) {
-            val result = bleClient.requestMtu(mtu)
+            val result = bleClient.requestMtu(uiState.value.requestMtu)
             if (result.isSuccess) {
                 val message = "Requested MTU: ${result.mtu} successfully"
                 Log.d(TAG, message)
