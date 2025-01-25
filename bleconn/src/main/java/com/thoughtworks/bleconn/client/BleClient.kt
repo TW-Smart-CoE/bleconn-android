@@ -24,12 +24,15 @@ import com.thoughtworks.bleconn.utils.silentResume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Timer
+import java.util.TimerTask
 import java.util.UUID
 import kotlin.coroutines.suspendCoroutine
 
 class BleClient(
     private val context: Context,
     private val logger: Logger = DefaultLogger(),
+    requestTimeout: Int = 3000,
 ) {
     private val bluetoothManager =
         context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -37,15 +40,16 @@ class BleClient(
     private var bluetoothGatt: BluetoothGatt? = null
 
     private var onConnectStateChanged: ((Boolean) -> Unit)? = null
-    private val connectCallback = CallbackHolder<Result>()
+    private val connectCallback = CallbackHolder<Result>(0)
     private val discoverServicesCallback = CallbackHolder<DiscoverServicesResult>()
-    private val requestMtuCallback = CallbackHolder<MtuResult>()
-    private val readCallback = KeyCallbackHolder<UUID, ReadResult>()
-    private val writeCallback = KeyCallbackHolder<UUID, Result>()
+    private val requestMtuCallback = CallbackHolder<MtuResult>(requestTimeout)
+    private val readCallback = KeyCallbackHolder<UUID, ReadResult>(requestTimeout)
+    private val writeCallback = KeyCallbackHolder<UUID, Result>(requestTimeout)
     private val enableNotificationCallback =
-        EnableNotificationCallbackHolder<UUID, Result, NotificationData>()
-    private val disableNotificationCallback = KeyCallbackHolder<UUID, Result>()
+        EnableNotificationCallbackHolder<UUID, Result, NotificationData>(requestTimeout)
+    private val disableNotificationCallback = KeyCallbackHolder<UUID, Result>(requestTimeout)
     private val notificationManager = NotificationHolder<UUID, NotificationData>()
+    private var callbackCheckTimer: Timer? = null
 
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
@@ -54,10 +58,12 @@ class BleClient(
             if (newState == BluetoothGatt.STATE_CONNECTED) {
                 logger.debug(TAG, "Connected to GATT server.")
                 connectCallback.resolve(Result(isSuccess = true))
+                startCallbackLoop()
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
                 val errorMessage = "Disconnected from GATT server."
                 logger.debug(TAG, errorMessage)
                 connectCallback.resolve(Result(errorMessage = errorMessage))
+                stopCallbackCheckLoop()
             }
         }
 
@@ -389,6 +395,7 @@ class BleClient(
         bluetoothGatt = null
         onConnectStateChanged = null
         logger.debug(TAG, "Disconnected from GATT server.")
+        stopCallbackCheckLoop()
     }
 
     private fun clearCallbacks() {
@@ -822,6 +829,76 @@ class BleClient(
 
             return true
         }
+    }
+
+    private fun startCallbackLoop() {
+        logger.debug(TAG, "startCallbackLoop")
+        callbackCheckTimer = Timer()
+        callbackCheckTimer?.apply {
+            schedule(object : TimerTask() {
+                override fun run() {
+                    if (discoverServicesCallback.isTimeout()) {
+                        discoverServicesCallback.resolve(
+                            DiscoverServicesResult(
+                                isSuccess = false,
+                                errorMessage = "Discover services timeout"
+                            )
+                        )
+                    }
+
+                    if (requestMtuCallback.isTimeout()) {
+                        requestMtuCallback.resolve(
+                            MtuResult(
+                                isSuccess = false,
+                                errorMessage = "Request MTU timeout"
+                            )
+                        )
+                    }
+
+                    if (readCallback.isTimeout()) {
+                        readCallback.resolve(
+                            ReadResult(
+                                isSuccess = false,
+                                errorMessage = "Read characteristic timeout"
+                            )
+                        )
+                    }
+
+                    if (writeCallback.isTimeout()) {
+                        writeCallback.resolve(
+                            Result(
+                                isSuccess = false,
+                                errorMessage = "Write characteristic timeout"
+                            )
+                        )
+                    }
+
+                    if (enableNotificationCallback.isTimeout()) {
+                        enableNotificationCallback.resolve(
+                            Result(
+                                isSuccess = false,
+                                errorMessage = "Enable notification timeout"
+                            )
+                        )
+                    }
+
+                    if (disableNotificationCallback.isTimeout()) {
+                        disableNotificationCallback.resolve(
+                            Result(
+                                isSuccess = false,
+                                errorMessage = "Disable notification timeout"
+                            )
+                        )
+                    }
+                }
+            }, 0, 1000)
+        }
+    }
+
+    private fun stopCallbackCheckLoop() {
+        logger.debug(TAG, "stopCallbackCheckLoop")
+        callbackCheckTimer?.cancel()
+        callbackCheckTimer = null
     }
 
     companion object {

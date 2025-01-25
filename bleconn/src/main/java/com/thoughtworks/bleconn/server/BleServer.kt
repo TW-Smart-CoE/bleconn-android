@@ -357,7 +357,6 @@ class BleServer(
         notificationTimer = null
     }
 
-
     @SuppressLint("MissingPermission")
     fun sendNotification(
         device: BluetoothDevice,
