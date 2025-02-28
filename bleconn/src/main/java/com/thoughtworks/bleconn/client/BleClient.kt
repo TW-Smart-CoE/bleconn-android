@@ -32,6 +32,7 @@ import kotlin.coroutines.suspendCoroutine
 class BleClient(
     private val context: Context,
     private val logger: Logger = DefaultLogger(),
+    connectTimeout: Int = 5000,
     requestTimeout: Int = 3000,
 ) {
     private val bluetoothManager =
@@ -40,8 +41,8 @@ class BleClient(
     private var bluetoothGatt: BluetoothGatt? = null
 
     private var onConnectStateChanged: ((Boolean) -> Unit)? = null
-    private val connectCallback = CallbackHolder<Result>(0)
-    private val discoverServicesCallback = CallbackHolder<DiscoverServicesResult>()
+    private val connectCallback = CallbackHolder<Result>(connectTimeout)
+    private val discoverServicesCallback = CallbackHolder<DiscoverServicesResult>(requestTimeout)
     private val requestMtuCallback = CallbackHolder<MtuResult>(requestTimeout)
     private val readCallback = KeyCallbackHolder<UUID, ReadResult>(requestTimeout)
     private val writeCallback = KeyCallbackHolder<UUID, Result>(requestTimeout)
@@ -58,12 +59,11 @@ class BleClient(
             if (newState == BluetoothGatt.STATE_CONNECTED) {
                 logger.debug(TAG, "Connected to GATT server.")
                 connectCallback.resolve(Result(isSuccess = true))
-                startCallbackLoop()
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
                 val errorMessage = "Disconnected from GATT server."
                 logger.debug(TAG, errorMessage)
-                connectCallback.resolve(Result(errorMessage = errorMessage))
                 stopCallbackCheckLoop()
+                connectCallback.resolve(Result(errorMessage = errorMessage))
             }
         }
 
@@ -368,6 +368,7 @@ class BleClient(
         this.onConnectStateChanged = onConnectStateChanged
 
         connectCallback.set(callback)
+        startCallbackLoop()
         val result = connectDevice(device)
         if (!result) {
             val errorMessage = "Failed to connect to GATT server."
@@ -837,6 +838,16 @@ class BleClient(
         callbackCheckTimer?.apply {
             schedule(object : TimerTask() {
                 override fun run() {
+                    if (connectCallback.isTimeout()) {
+                        disconnect()
+                        connectCallback.resolve(
+                            Result(
+                                isSuccess = false,
+                                errorMessage = "Connect timeout"
+                            )
+                        )
+                    }
+
                     if (discoverServicesCallback.isTimeout()) {
                         discoverServicesCallback.resolve(
                             DiscoverServicesResult(
