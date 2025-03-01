@@ -3,7 +3,7 @@ package com.thoughtworks.bleconn.utils
 import java.util.concurrent.ConcurrentHashMap
 
 class CallbackHolder<T>(
-    private val timeout: Int = 0
+    private val timeout: Int = 0,
 ) {
     private var callback: ((T) -> Unit)? = null
     private var setTime: Long = 0L
@@ -27,17 +27,12 @@ class CallbackHolder<T>(
         callback = null
     }
 
-    fun isTimeout(): Boolean {
-        return if (timeout > 0) {
-            System.currentTimeMillis() - setTime > timeout
-        } else {
-            false
-        }
-    }
+    fun isTimeout() =
+        callback != null && timeout > 0 && System.currentTimeMillis() - setTime > timeout
 }
 
 class KeyCallbackHolder<K, T>(
-    private val timeout: Int = 0
+    private val timeout: Int = 0,
 ) {
     private var key: K? = null
     private var callback: ((T) -> Unit)? = null
@@ -69,17 +64,12 @@ class KeyCallbackHolder<K, T>(
         setTime = 0L
     }
 
-    fun isTimeout(): Boolean {
-        return if (timeout > 0) {
-            System.currentTimeMillis() - setTime > timeout
-        } else {
-            false
-        }
-    }
+    fun isTimeout() =
+        callback != null && timeout > 0 && System.currentTimeMillis() - setTime > timeout
 }
 
 class EnableNotificationCallbackHolder<K, T, N>(
-    private val timeout: Int = 0
+    private val timeout: Int = 0,
 ) {
     private var key: K? = null
     private var callback: ((T) -> Unit)? = null
@@ -117,13 +107,8 @@ class EnableNotificationCallbackHolder<K, T, N>(
         setTime = 0L
     }
 
-    fun isTimeout(): Boolean {
-        return if (timeout > 0) {
-            System.currentTimeMillis() - setTime > timeout
-        } else {
-            false
-        }
-    }
+    fun isTimeout() =
+        callback != null && timeout > 0 && System.currentTimeMillis() - setTime > timeout
 }
 
 class NotificationHolder<K, V> {
