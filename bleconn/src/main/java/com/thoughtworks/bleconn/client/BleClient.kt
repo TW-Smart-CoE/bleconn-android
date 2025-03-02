@@ -839,13 +839,14 @@ class BleClient(
             schedule(object : TimerTask() {
                 override fun run() {
                     if (connectCallback.isTimeout()) {
-                        disconnect()
+                        logger.debug(TAG, "Connect timeout")
                         connectCallback.resolve(
                             Result(
                                 isSuccess = false,
                                 errorMessage = "Connect timeout"
                             )
                         )
+                        disconnect()
                     }
 
                     if (discoverServicesCallback.isTimeout()) {
