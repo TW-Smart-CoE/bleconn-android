@@ -1,6 +1,8 @@
 package com.thoughtworks.bleconn.app.ui.views.bleserver
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt.GATT_SUCCESS
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
@@ -14,6 +16,7 @@ import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.AdvertisingSetCallback.ADVERTISE_SUCCESS
 import android.os.ParcelUuid
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -24,6 +27,7 @@ import com.thoughtworks.bleconn.app.foundation.mvi.DefaultStore
 import com.thoughtworks.bleconn.app.foundation.mvi.MVIViewModel
 import com.thoughtworks.bleconn.app.foundation.mvi.Store
 import com.thoughtworks.bleconn.definitions.DescriptorUUID
+import com.thoughtworks.bleconn.server.BleServer
 import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder
 import com.thoughtworks.bleconn.server.characteristic.CharacteristicHolder.ReadWriteResult
 import com.thoughtworks.bleconn.server.descriptor.DescriptorHolder
@@ -54,6 +58,22 @@ class BleServerViewModel(
         bluetoothStateMonitor.start {
             onBluetoothStateChanged(it)
         }
+
+        bleServer.setBleServerListener(object : BleServer.BleServerListener {
+            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+            override fun onDeviceConnected(device: BluetoothDevice) {
+                Log.d(TAG, "Device connected: ${device.address}, connected devices: ${bleServer.getConnectedDevices()}")
+                if (bleServer.getConnectedDevices().size > 1) {
+                    Log.d(TAG, "Disconnecting device: ${device.address}")
+                    bleServer.cancelConnection(device)
+                }
+            }
+
+            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+            override fun onDeviceDisconnected(device: BluetoothDevice) {
+                Log.d(TAG, "Device disconnected: ${device.address}, connected devices: ${bleServer.getConnectedDevices()}")
+            }
+        })
     }
 
     private fun onBluetoothStateChanged(state: Int) {
@@ -207,8 +227,8 @@ class BleServerViewModel(
 
     private suspend fun startAdvertiser() {
         val advertiseSettings = AdvertiseSettings.Builder()
-            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
-            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_ULTRA_LOW)
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
             .setConnectable(true)
             .build()
 

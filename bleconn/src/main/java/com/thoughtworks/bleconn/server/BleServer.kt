@@ -1,5 +1,6 @@
 package com.thoughtworks.bleconn.server
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -11,6 +12,7 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.os.SystemClock
+import androidx.annotation.RequiresPermission
 import com.thoughtworks.bleconn.definitions.DescriptorUUID
 import com.thoughtworks.bleconn.server.service.ServiceHolder
 import com.thoughtworks.bleconn.utils.GattUtils.notifyCharacteristicChangedCompact
@@ -31,15 +33,23 @@ class BleServer(
     private var gattServer: BluetoothGattServer? = null
     private val serviceHolders = mutableListOf<ServiceHolder>()
     private val subscribedDevicesLock = Any()
+    private var bleServerListener: BleServerListener? = null
+
+    interface BleServerListener {
+        fun onDeviceConnected(device: BluetoothDevice)
+        fun onDeviceDisconnected(device: BluetoothDevice)
+    }
 
     private val gattServerCallback = object : BluetoothGattServerCallback() {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             super.onConnectionStateChange(device, status, newState)
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 logger.debug(TAG, "Device connected: ${device.address}")
+                bleServerListener?.onDeviceConnected(device)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 logger.debug(TAG, "Device disconnected: ${device.address}")
                 removeDisconnectDeviceNotification(device)
+                bleServerListener?.onDeviceDisconnected(device)
             }
         }
 
@@ -302,6 +312,22 @@ class BleServer(
         serviceHolders.clear()
     }
 
+    fun setBleServerListener(listener: BleServerListener) {
+        this.bleServerListener = listener
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun getConnectedDevices(): List<BluetoothDevice> {
+        val bluetoothManager =
+            context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        return bluetoothManager.getConnectedDevices(BluetoothProfile.GATT)
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun cancelConnection(device: BluetoothDevice) {
+        gattServer?.cancelConnection(device)
+    }
+
     private fun startNotificationLoop() {
         notificationTimer = Timer()
         notificationTimer?.apply {
@@ -340,7 +366,9 @@ class BleServer(
                                                     TAG,
                                                     "Remove devices: ${tobeRemoved.joinToString { it.address }}"
                                                 )
-                                                notificationHolder.subscribedDevices.removeAll(tobeRemoved)
+                                                notificationHolder.subscribedDevices.removeAll(
+                                                    tobeRemoved
+                                                )
                                             }
                                         }
                                     }
