@@ -95,31 +95,45 @@ class BleClientViewModel(
             }
 
             is BleClientAction.ConnectStatusChanged -> {
-                discoverServicesAsync(action.isConnected)
+                runAsync {
+                    discoverServices(action.isConnected)
+                }
             }
 
             is BleClientAction.DiscoverServices -> {
-                discoverServicesAsync(currentState.isConnected)
+                runAsync {
+                    discoverServices(currentState.isConnected)
+                }
             }
 
             is BleClientAction.RequestMtu -> {
-                requestMtuAsync()
+                runAsync {
+                    requestMtu()
+                }
             }
 
             is BleClientAction.ReadDeviceInfo -> {
-                readDeviceInfoAsync()
+                runAsync {
+                    readDeviceInfo()
+                }
             }
 
             is BleClientAction.WriteWiFiConfig -> {
-                writeWiFiConfigAsync(action.ssid, action.password)
+                runAsync {
+                    writeWiFiConfig(action.ssid, action.password)
+                }
             }
 
             is BleClientAction.EnableNotification -> {
-                enableNotificationAsync()
+                runAsync {
+                    enableNotification()
+                }
             }
 
             is BleClientAction.DisableNotification -> {
-                disableNotificationAsync()
+                runAsync {
+                    disableNotification()
+                }
             }
 
             else -> {
@@ -127,121 +141,109 @@ class BleClientViewModel(
         }
     }
 
-    private fun disableNotificationAsync() {
-        viewModelScope.launch(ioDispatcher) {
-            val result = bleClient.disableCharacteristicNotification(
-                BleUUID.SERVICE,
-                BleUUID.CHARACTERISTIC_DEVICE_STATUS,
-            )
+    private suspend fun disableNotification() {
+        val result = bleClient.disableCharacteristicNotification(
+            BleUUID.SERVICE,
+            BleUUID.CHARACTERISTIC_DEVICE_STATUS,
+        )
 
-            val message = if (result.isSuccess) {
-                "Disable notification successfully"
-            } else {
-                result.errorMessage
-            }
+        val message = if (result.isSuccess) {
+            "Disable notification successfully"
+        } else {
+            result.errorMessage
+        }
 
-            if (result.isSuccess) {
-                Log.d(TAG, message)
-            } else {
-                Log.e(TAG, message)
-            }
+        if (result.isSuccess) {
+            Log.d(TAG, message)
+        } else {
+            Log.e(TAG, message)
+        }
+        sendEvent(BleClientEvent.ShowToast(message))
+    }
+
+    private suspend fun enableNotification() {
+        val result = bleClient.enableCharacteristicNotification(
+            BleUUID.SERVICE,
+            BleUUID.CHARACTERISTIC_DEVICE_STATUS,
+            true,
+        ) {
+            Log.d(TAG, "Notification data arrived: ${String(it.value)}")
+            sendAction(BleClientAction.OnNotification(String(it.value)))
+        }
+
+        val message = if (result.isSuccess) {
+            "Enable notification successfully"
+        } else {
+            result.errorMessage
+        }
+
+        if (result.isSuccess) {
+            Log.d(TAG, message)
+        } else {
+            Log.e(TAG, message)
+        }
+        sendEvent(BleClientEvent.ShowToast(message))
+    }
+
+    private suspend fun writeWiFiConfig(ssid: String, password: String) {
+        val result = bleClient.writeCharacteristic(
+            BleUUID.SERVICE,
+            BleUUID.CHARACTERISTIC_WIFI,
+            "$ssid;$password".toByteArray(),
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        )
+        val message = if (result.isSuccess) {
+            "Write WiFi config successfully"
+        } else {
+            result.errorMessage
+        }
+
+        if (result.isSuccess) {
+            Log.d(TAG, message)
+        } else {
+            Log.e(TAG, message)
+        }
+
+        sendEvent(BleClientEvent.ShowToast(message))
+    }
+
+    private suspend fun readDeviceInfo() {
+        val result =
+            bleClient.readCharacteristic(BleUUID.SERVICE, BleUUID.CHARACTERISTIC_DEVICE_INFO)
+        if (result.isSuccess) {
+            val message = "Device info: ${String(result.value)}"
+            Log.d(TAG, message)
             sendEvent(BleClientEvent.ShowToast(message))
+        } else {
+            Log.e(TAG, result.errorMessage)
+            sendEvent(BleClientEvent.ShowToast("Failed to read device info"))
         }
     }
 
-    private fun enableNotificationAsync() {
-        viewModelScope.launch(ioDispatcher) {
-            val result = bleClient.enableCharacteristicNotification(
-                BleUUID.SERVICE,
-                BleUUID.CHARACTERISTIC_DEVICE_STATUS,
-                true,
-            ) {
-                Log.d(TAG, "Notification data arrived: ${String(it.value)}")
-                sendAction(BleClientAction.OnNotification(String(it.value)))
-            }
-
-            val message = if (result.isSuccess) {
-                "Enable notification successfully"
-            } else {
-                result.errorMessage
-            }
-
-            if (result.isSuccess) {
-                Log.d(TAG, message)
-            } else {
-                Log.e(TAG, message)
-            }
+    private suspend fun requestMtu() {
+        val result = bleClient.requestMtu(uiState.value.requestMtu)
+        if (result.isSuccess) {
+            val message = "Requested MTU: ${result.mtu} successfully"
+            Log.d(TAG, message)
+            sendAction(BleClientAction.OnMtuUpdated(result.mtu))
             sendEvent(BleClientEvent.ShowToast(message))
+        } else {
+            Log.e(TAG, result.errorMessage)
+            sendEvent(BleClientEvent.ShowToast(result.errorMessage))
         }
     }
 
-    private fun writeWiFiConfigAsync(ssid: String, password: String) {
-        viewModelScope.launch(ioDispatcher) {
-            val result = bleClient.writeCharacteristic(
-                BleUUID.SERVICE,
-                BleUUID.CHARACTERISTIC_WIFI,
-                "$ssid;$password".toByteArray(),
-                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            )
-            val message = if (result.isSuccess) {
-                "Write WiFi config successfully"
-            } else {
-                result.errorMessage
-            }
-
-            if (result.isSuccess) {
-                Log.d(TAG, message)
-            } else {
-                Log.e(TAG, message)
-            }
-
-            sendEvent(BleClientEvent.ShowToast(message))
-        }
-    }
-
-    private fun readDeviceInfoAsync() {
-        viewModelScope.launch(ioDispatcher) {
-            val result =
-                bleClient.readCharacteristic(BleUUID.SERVICE, BleUUID.CHARACTERISTIC_DEVICE_INFO)
-            if (result.isSuccess) {
-                val message = "Device info: ${String(result.value)}"
-                Log.d(TAG, message)
-                sendEvent(BleClientEvent.ShowToast(message))
-            } else {
+    private suspend fun discoverServices(isConnected: Boolean) {
+        if (isConnected) {
+            val result = bleClient.discoverServices()
+            if (!result.isSuccess) {
                 Log.e(TAG, result.errorMessage)
-                sendEvent(BleClientEvent.ShowToast("Failed to read device info"))
             }
-        }
-    }
-
-    private fun requestMtuAsync() {
-        viewModelScope.launch(ioDispatcher) {
-            val result = bleClient.requestMtu(uiState.value.requestMtu)
-            if (result.isSuccess) {
-                val message = "Requested MTU: ${result.mtu} successfully"
-                Log.d(TAG, message)
-                sendAction(BleClientAction.OnMtuUpdated(result.mtu))
-                sendEvent(BleClientEvent.ShowToast(message))
-            } else {
-                Log.e(TAG, result.errorMessage)
-                sendEvent(BleClientEvent.ShowToast(result.errorMessage))
-            }
-        }
-    }
-
-    private fun discoverServicesAsync(isConnected: Boolean) {
-        viewModelScope.launch(ioDispatcher) {
-            if (isConnected) {
-                val result = bleClient.discoverServices()
-                if (!result.isSuccess) {
-                    Log.e(TAG, result.errorMessage)
-                }
-                sendAction(BleClientAction.OnServicesDiscovered(result.services.filter {
-                    it.uuid == BleUUID.SERVICE
-                }))
-            } else {
-                sendAction(BleClientAction.OnServicesDiscovered(emptyList()))
-            }
+            sendAction(BleClientAction.OnServicesDiscovered(result.services.filter {
+                it.uuid == BleUUID.SERVICE
+            }))
+        } else {
+            sendAction(BleClientAction.OnServicesDiscovered(emptyList()))
         }
     }
 

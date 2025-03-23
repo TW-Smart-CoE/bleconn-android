@@ -62,7 +62,10 @@ class BleServerViewModel(
         bleServer.setBleServerListener(object : BleServer.BleServerListener {
             @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
             override fun onDeviceConnected(device: BluetoothDevice) {
-                Log.d(TAG, "Device connected: ${device.address}, connected devices: ${bleServer.getConnectedDevices()}")
+                Log.d(
+                    TAG,
+                    "Device connected: ${device.address}, connected devices: ${bleServer.getConnectedDevices()}"
+                )
                 if (bleServer.getConnectedDevices().size > 1) {
                     Log.d(TAG, "Disconnecting device: ${device.address}")
                     bleServer.cancelConnection(device)
@@ -71,7 +74,10 @@ class BleServerViewModel(
 
             @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
             override fun onDeviceDisconnected(device: BluetoothDevice) {
-                Log.d(TAG, "Device disconnected: ${device.address}, connected devices: ${bleServer.getConnectedDevices()}")
+                Log.d(
+                    TAG,
+                    "Device disconnected: ${device.address}, connected devices: ${bleServer.getConnectedDevices()}"
+                )
             }
         })
     }
@@ -123,7 +129,9 @@ class BleServerViewModel(
             }
 
             BleServerAction.Start -> {
-                bleServerStartAsync()
+                runAsync {
+                    bleServerStart()
+                }
             }
 
             BleServerAction.Stop -> {
@@ -137,17 +145,15 @@ class BleServerViewModel(
         bleServer.stop()
     }
 
-    private fun bleServerStartAsync() {
-        viewModelScope.launch(ioDispatcher) {
-            if (startServer()) {
-                startAdvertiser()
-            } else {
-                val errorMessage = "Failed to start server"
-                Log.e(TAG, errorMessage)
-                sendEvent(BleServerEvent.ShowToast(errorMessage))
+    private suspend fun bleServerStart() {
+        if (startServer()) {
+            startAdvertiser()
+        } else {
+            val errorMessage = "Failed to start server"
+            Log.e(TAG, errorMessage)
+            sendEvent(BleServerEvent.ShowToast(errorMessage))
 
-                sendAction(BleServerAction.Stop)
-            }
+            sendAction(BleServerAction.Stop)
         }
     }
 

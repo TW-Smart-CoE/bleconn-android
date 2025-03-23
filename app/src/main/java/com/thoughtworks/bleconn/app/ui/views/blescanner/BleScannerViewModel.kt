@@ -7,14 +7,12 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
 import com.thoughtworks.bleconn.app.definitions.BleUUID
 import com.thoughtworks.bleconn.app.definitions.Manufacturer
 import com.thoughtworks.bleconn.app.di.Dependency
 import com.thoughtworks.bleconn.app.foundation.mvi.DefaultStore
 import com.thoughtworks.bleconn.app.foundation.mvi.MVIViewModel
 import com.thoughtworks.bleconn.app.foundation.mvi.Store
-import kotlinx.coroutines.launch
 
 
 class BleScannerViewModel(
@@ -96,7 +94,9 @@ class BleScannerViewModel(
             }
 
             is BleScannerAction.StartScan -> {
-                bleScannerStartAsync()
+                runAsync {
+                    bleScannerStart()
+                }
             }
 
             is BleScannerAction.StopScan -> {
@@ -112,32 +112,30 @@ class BleScannerViewModel(
         }
     }
 
-    private fun bleScannerStartAsync() {
-        viewModelScope.launch(ioDispatcher) {
-            val filters = listOf(
-                ScanFilter.Builder()
-                    .setServiceUuid(ParcelUuid(BleUUID.SERVICE))
-                    .setManufacturerData(Manufacturer.ID, Manufacturer.data, Manufacturer.dataMask)
-                    .build()
-            )
-
-            val settings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+    private suspend fun bleScannerStart() {
+        val filters = listOf(
+            ScanFilter.Builder()
+                .setServiceUuid(ParcelUuid(BleUUID.SERVICE))
+                .setManufacturerData(Manufacturer.ID, Manufacturer.data, Manufacturer.dataMask)
                 .build()
+        )
 
-            bleScanner.start(
-                filters,
-                settings,
-                onFound = { result ->
-                    Log.d(TAG, "Found device: ${result.device.address}")
-                    sendAction(BleScannerAction.OnFoundDevice(result))
-                },
-            ) { errorCode ->
-                Log.e(TAG, "Scan failed with error code: $errorCode")
-                sendEvent(BleScannerEvent.ShowToast("Scan failed with error code: $errorCode"))
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+            .build()
 
-                sendAction(BleScannerAction.StopScan)
-            }
+        bleScanner.start(
+            filters,
+            settings,
+            onFound = { result ->
+                Log.d(TAG, "Found device: ${result.device.address}")
+                sendAction(BleScannerAction.OnFoundDevice(result))
+            },
+        ) { errorCode ->
+            Log.e(TAG, "Scan failed with error code: $errorCode")
+            sendEvent(BleScannerEvent.ShowToast("Scan failed with error code: $errorCode"))
+
+            sendAction(BleScannerAction.StopScan)
         }
     }
 
