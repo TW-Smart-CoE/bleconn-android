@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -181,34 +183,33 @@ fun StatRow(label: String, successCount: Int, failCount: Int) {
         Text(
             label,
             color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            modifier = Modifier.weight(1f)
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp,
         )
         Spacer(modifier = Modifier.weight(1f))
         Text(
             "Success: ",
             color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp
         )
         Text(
             "$successCount",
             color = Color.Green,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp
         )
         Text(
             " Fail: ",
             color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp
         )
         Text(
             "$failCount",
             color = Color.Red,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp
         )
     }
 }
