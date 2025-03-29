@@ -20,6 +20,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -67,10 +68,12 @@ fun BlePerfScreen(dependency: Dependency) {
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    reverseLayout = true
                 ) {
                     items(state.value.log) { logMessage ->
-                        Text(text = logMessage, style = MaterialTheme.typography.bodyMedium)
+                        val color = if (logMessage.contains("[ERROR]")) Color.Red else Color.Unspecified
+                        Text(text = logMessage, style = MaterialTheme.typography.bodyMedium, color = color)
                     }
                 }
             }

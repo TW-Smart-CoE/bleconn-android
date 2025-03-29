@@ -319,7 +319,7 @@ class BleClient(
 
     suspend fun connect(
         deviceAddress: String,
-        onConnectStateChanged: (Boolean) -> Unit,
+        onConnectStateChanged: ((Boolean) -> Unit)?,
     ): Result {
         return suspendCoroutine { continuation ->
             CoroutineScope(Dispatchers.IO).launch {
@@ -332,7 +332,7 @@ class BleClient(
 
     fun connect(
         deviceAddress: String,
-        onConnectStateChanged: (Boolean) -> Unit,
+        onConnectStateChanged: ((Boolean) -> Unit)?,
         callback: (Result) -> Unit,
     ): Boolean {
         if (!bluetoothAdapter.isEnabled) {

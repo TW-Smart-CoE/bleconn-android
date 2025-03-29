@@ -7,7 +7,6 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
 import com.thoughtworks.bleconn.app.definitions.BleUUID
 import com.thoughtworks.bleconn.app.definitions.Manufacturer
 import com.thoughtworks.bleconn.app.di.Dependency
@@ -15,15 +14,16 @@ import com.thoughtworks.bleconn.app.foundation.mvi.DefaultStore
 import com.thoughtworks.bleconn.app.foundation.mvi.MVIViewModel
 import com.thoughtworks.bleconn.app.foundation.mvi.Store
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class BlePerfViewModel(
     dependency: Dependency,
     store: Store<BlePerfState, BlePerfEvent, BlePerfAction> = DefaultStore(
         initialState = BlePerfState()
-    )
+    ),
 ) : MVIViewModel<BlePerfState, BlePerfEvent, BlePerfAction>(store) {
-    private val ioDispatcher = dependency.coroutineDispatchers.ioDispatcher
     private val navigator = dependency.navigator
     private val bleClient = dependency.bleClient
     private val bleScanner = dependency.bleScanner
@@ -33,6 +33,7 @@ class BlePerfViewModel(
     }
 
     private fun startScan() {
+        logMessage("Starting scan...")
         runAsync {
             val filters = listOf(
                 ScanFilter.Builder()
@@ -49,10 +50,13 @@ class BlePerfViewModel(
                 settings = settings,
                 onFound = { result ->
                     bleScanner.stop()
+                    logMessage("Device found: ${result.device.address}")
                     sendAction(BlePerfAction.OnFoundDevice(result.device.address))
                 },
                 onError = { errorCode ->
-                    sendEvent(BlePerfEvent.ShowToast("Scan failed with error code: $errorCode"))
+                    logMessage("Scan failed with error code: $errorCode", true)
+                    bleScanner.stop()
+                    disconnectAndRestart()
                 }
             )
         }
@@ -60,16 +64,8 @@ class BlePerfViewModel(
 
     override fun reduce(currentState: BlePerfState, action: BlePerfAction): BlePerfState {
         return when (action) {
-            is BlePerfAction.ConnectStatusChanged -> {
-                currentState.copy(isConnected = action.isConnected)
-            }
-
-            is BlePerfAction.OnMtuUpdated -> {
-                currentState.copy(mtu = action.mtu)
-            }
-
             is BlePerfAction.LogMessage -> {
-                currentState.copy(log = currentState.log + action.message)
+                currentState.copy(log = listOf(action.message) + currentState.log)
             }
 
             else -> currentState
@@ -83,111 +79,130 @@ class BlePerfViewModel(
             }
 
             is BlePerfAction.OnFoundDevice -> {
-                connectToDevice(action.address)
+                startTest(action.address)
             }
 
-            is BlePerfAction.ConnectStatusChanged -> {
-                if (action.isConnected) discoverServices()
-            }
-
-            is BlePerfAction.OnServicesDiscovered -> {
-                requestMtu()
-            }
-
-            is BlePerfAction.OnMtuUpdated -> {
-                if (action.mtu >= 0) {
-                    startReadWriteTest()
-                }
-            }
-
-            is BlePerfAction.StartReadWriteTest -> {
-                performReadWriteTest()
+            is BlePerfAction.RestartProcess -> {
+                startScan()
             }
 
             else -> {}
         }
     }
 
-    private fun connectToDevice(address: String) {
+    private fun startTest(address: String) {
         runAsync {
-            bleClient.connect(address) { isConnected ->
-                sendAction(BlePerfAction.ConnectStatusChanged(isConnected))
-            }
+            if (!connectToDevice(address)) return@runAsync
+            if (!discoverServices()) return@runAsync
+            if (!requestMtu()) return@runAsync
+            performReadWriteTest()
+            disconnectAndRestart()
         }
     }
 
-    private fun discoverServices() {
-        viewModelScope.launch(ioDispatcher) {
-            val result = bleClient.discoverServices()
-            if (result.isSuccess) {
-                sendAction(BlePerfAction.OnServicesDiscovered(result.services))
+    private suspend fun connectToDevice(address: String): Boolean {
+        logMessage("Connecting to device: $address")
+        val connResult = bleClient.connect(address) {}
+        return if (!connResult.isSuccess) {
+            disconnectAndRestart()
+            false
+        } else {
+            logMessage("Connected to device: $address")
+            true
+        }
+    }
+
+    private suspend fun discoverServices(): Boolean {
+        logMessage("Discovering services...")
+        val discoverResult = bleClient.discoverServices()
+        return if (!discoverResult.isSuccess) {
+            logMessage("Failed to discover services: ${discoverResult.errorMessage}", true)
+            disconnectAndRestart()
+            false
+        } else {
+            logMessage("Services discovered successfully")
+            true
+        }
+    }
+
+    private suspend fun requestMtu(): Boolean {
+        logMessage("Requesting MTU $PERF_TEST_MTU ...")
+        val mtuResult = bleClient.requestMtu(PERF_TEST_MTU)
+        return if (!mtuResult.isSuccess) {
+            logMessage("Failed to request MTU ${PERF_TEST_MTU}: ${mtuResult.errorMessage}", true)
+            disconnectAndRestart()
+            false
+        } else {
+            logMessage("MTU updated to ${mtuResult.mtu}")
+            true
+        }
+    }
+
+    private suspend fun performReadWriteTest() {
+        logMessage("Starting read/write test...")
+        repeat(READ_WRITE_TIMES) {
+            val readResult = bleClient.readCharacteristic(
+                BleUUID.SERVICE,
+                BleUUID.CHARACTERISTIC_PERF_TEST_READ
+            )
+            if (readResult.isSuccess) {
+                logMessage("Read data: ${readResult.value.size} bytes")
             } else {
-                logMessage("Failed to discover services: ${result.errorMessage}")
+                logMessage("Read failed: ${readResult.errorMessage}", true)
+                disconnectAndRestart()
+                return
             }
-        }
-    }
 
-    private fun requestMtu() {
-        viewModelScope.launch(ioDispatcher) {
-            val result = bleClient.requestMtu(PERF_TEST_MTU)
-            if (result.isSuccess) {
-                sendAction(BlePerfAction.OnMtuUpdated(result.mtu))
+            delay(READ_WRITE_DELAY)
+
+            val writeResult = bleClient.writeCharacteristic(
+                BleUUID.SERVICE,
+                BleUUID.CHARACTERISTIC_PERF_TEST_WRITE,
+                ByteArray(PERF_TEST_WRITE_DATA_SIZE) { 0 },
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            )
+            if (writeResult.isSuccess) {
+                logMessage("Write data $PERF_TEST_WRITE_DATA_SIZE bytes")
             } else {
-                logMessage("Failed to request MTU: ${result.errorMessage}")
+                logMessage("Write failed: ${writeResult.errorMessage}", true)
+                disconnectAndRestart()
+                return
             }
+
+            delay(READ_WRITE_DELAY)
         }
+
+        logMessage("Read/Write test completed successfully")
     }
 
-    private fun startReadWriteTest() {
-        sendAction(BlePerfAction.StartReadWriteTest)
+    private fun disconnectAndRestart() {
+        bleClient.disconnect()
+        sendAction(BlePerfAction.RestartProcess)
     }
 
-    private fun performReadWriteTest() {
-        viewModelScope.launch(ioDispatcher) {
-            while (true) {
-                val readResult = bleClient.readCharacteristic(
-                    BleUUID.SERVICE,
-                    BleUUID.CHARACTERISTIC_PERF_TEST_READ
-                )
-                if (readResult.isSuccess) {
-                    logMessage("Read data: ${readResult.value.size} bytes")
-                } else {
-                    logMessage("Read failed: ${readResult.errorMessage}")
-                }
-
-                delay(3000)
-
-                val writeResult = bleClient.writeCharacteristic(
-                    BleUUID.SERVICE,
-                    BleUUID.CHARACTERISTIC_PERF_TEST_WRITE,
-                    ByteArray(PERF_TEST_WRITE_DATA_SIZE) { 0 },
-                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                )
-                if (writeResult.isSuccess) {
-                    logMessage("Write data successful")
-                } else {
-                    logMessage("Write failed: ${writeResult.errorMessage}")
-                }
-
-                delay(3000)
-            }
-        }
-    }
-
-    private fun logMessage(message: String) {
-        sendAction(BlePerfAction.LogMessage(message))
+    private fun logMessage(message: String, isError: Boolean = false) {
+        val timestamp = SimpleDateFormat("yyyy.MM.dd-HH:mm:ss", Locale.getDefault()).format(Date())
+        val logMessage = if (isError) "[ERROR] $message" else message
+        sendAction(BlePerfAction.LogMessage("[$timestamp] $logMessage"))
         Log.d(TAG, message)
+    }
+
+    override fun onCleared() {
+        bleScanner.stop()
+        bleClient.disconnect()
     }
 
     companion object {
         private const val TAG = "BlePerfViewModel"
         private const val PERF_TEST_MTU = 480
         private const val PERF_TEST_WRITE_DATA_SIZE = 200
+        private const val READ_WRITE_TIMES = 3
+        private const val READ_WRITE_DELAY = 2000L
     }
 }
 
 class BlePerfViewModelFactory(
-    private val dependency: Dependency
+    private val dependency: Dependency,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(BlePerfViewModel::class.java)) {
@@ -197,3 +212,4 @@ class BlePerfViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+
