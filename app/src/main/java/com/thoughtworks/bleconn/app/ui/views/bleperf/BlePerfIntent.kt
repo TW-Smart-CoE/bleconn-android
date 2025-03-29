@@ -3,11 +3,11 @@ package com.thoughtworks.bleconn.app.ui.views.bleperf
 import com.thoughtworks.bleconn.app.foundation.mvi.model.Action
 import com.thoughtworks.bleconn.app.foundation.mvi.model.Event
 import com.thoughtworks.bleconn.app.foundation.mvi.model.State
+import java.util.LinkedList
+import java.util.Queue
 
 data class BlePerfState(
-    val isScanning: Boolean = false,
-    val isConnected: Boolean = false,
-    val log: List<String> = emptyList(),
+    val log: Queue<String> = LinkedList(),
     val connectSuccessCount: Int = 0,
     val connectFailCount: Int = 0,
     val discoverSuccessCount: Int = 0,

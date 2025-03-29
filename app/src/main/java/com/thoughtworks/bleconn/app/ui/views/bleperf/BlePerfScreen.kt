@@ -5,12 +5,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -21,13 +24,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -50,7 +51,6 @@ fun BlePerfScreen(dependency: Dependency) {
     val event = viewModel.uiEvent
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    var autoScroll by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
@@ -80,14 +80,14 @@ fun BlePerfScreen(dependency: Dependency) {
             ) {
                 CardView(state.value)
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .weight(1f),
-                    state = listState,
+                        .weight(1f)
+                        .padding(top = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    reverseLayout = true
                 ) {
-                    items(state.value.log.takeLast(100)) { logMessage ->
+                    items(state.value.log.toList()) { logMessage ->
                         val color =
                             if (logMessage.contains("[ERROR]")) Color.Red else Color.Unspecified
                         Text(
@@ -101,17 +101,14 @@ fun BlePerfScreen(dependency: Dependency) {
         }
     )
 
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress && listState.firstVisibleItemIndex == 0) {
-            autoScroll = true
-        } else if (listState.isScrollInProgress) {
-            autoScroll = false
-        }
-    }
-
-    LaunchedEffect(state.value.log) {
-        if (autoScroll) {
-            listState.animateScrollToItem(0)
+    LaunchedEffect(state.value.log.size) {
+        if (state.value.log.isNotEmpty()) {
+            val lastIndex = state.value.log.size - 1
+            val fifthLastIndex = (lastIndex - 5).coerceAtLeast(0)
+            val fifthLastItemVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == fifthLastIndex }
+            if (fifthLastItemVisible) {
+                listState.animateScrollToItem(lastIndex)
+            }
         }
     }
 
@@ -133,101 +130,85 @@ fun BlePerfScreen(dependency: Dependency) {
 
 @Composable
 fun CardView(state: BlePerfState) {
-    Column(
+    val primaryColor = MaterialTheme.colorScheme.primary
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .clip(RoundedCornerShape(8.dp))
+            .background(primaryColor)
             .padding(8.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .background(primaryColor)
         ) {
-            Text(
-                "Connect Success: ${state.connectSuccessCount}",
-                color = Color.Green,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+            StatRow(
+                label = "Connect",
+                successCount = state.connectSuccessCount,
+                failCount = state.connectFailCount
             )
-            Text(
-                "Fail: ${state.connectFailCount}",
-                color = Color.Red,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+            StatRow(
+                label = "Discover",
+                successCount = state.discoverSuccessCount,
+                failCount = state.discoverFailCount
+            )
+            StatRow(
+                label = "Request MTU",
+                successCount = state.requestMtuSuccessCount,
+                failCount = state.requestMtuFailCount
+            )
+            StatRow(
+                label = "Read",
+                successCount = state.readSuccessCount,
+                failCount = state.readFailCount
+            )
+            StatRow(
+                label = "Write",
+                successCount = state.writeSuccessCount,
+                failCount = state.writeFailCount
             )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Discover Success: ${state.discoverSuccessCount}",
-                color = Color.Green,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            Text(
-                "Fail: ${state.discoverFailCount}",
-                color = Color.Red,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Request MTU Success: ${state.requestMtuSuccessCount}",
-                color = Color.Green,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            Text(
-                "Fail: ${state.requestMtuFailCount}",
-                color = Color.Red,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Read Success: ${state.readSuccessCount}",
-                color = Color.Green,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            Text(
-                "Fail: ${state.readFailCount}",
-                color = Color.Red,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Write Success: ${state.writeSuccessCount}",
-                color = Color.Green,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            Text(
-                "Fail: ${state.writeFailCount}",
-                color = Color.Red,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-        }
+    }
+}
+
+@Composable
+fun StatRow(label: String, successCount: Int, failCount: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            "Success: ",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp
+        )
+        Text(
+            "$successCount",
+            color = Color.Green,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp
+        )
+        Text(
+            " Fail: ",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp
+        )
+        Text(
+            "$failCount",
+            color = Color.Red,
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp
+        )
     }
 }

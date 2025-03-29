@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.LinkedList
 
 class BlePerfViewModel(
     dependency: Dependency,
@@ -27,6 +28,7 @@ class BlePerfViewModel(
     private val navigator = dependency.navigator
     private val bleClient = dependency.bleClient
     private val bleScanner = dependency.bleScanner
+    private var mtu = 20
 
     init {
         startScan()
@@ -65,7 +67,12 @@ class BlePerfViewModel(
     override fun reduce(currentState: BlePerfState, action: BlePerfAction): BlePerfState {
         return when (action) {
             is BlePerfAction.LogMessage -> {
-                currentState.copy(log = listOf(action.message) + currentState.log)
+                val newLog = LinkedList(currentState.log)
+                newLog.add(action.message)
+                if (newLog.size > MAX_LOG_SIZE) {
+                    newLog.poll()
+                }
+                currentState.copy(log = newLog)
             }
 
             is BlePerfAction.IncreaseConnectSuccessCount -> {
@@ -180,6 +187,7 @@ class BlePerfViewModel(
         } else {
             sendAction(BlePerfAction.IncreaseRequestMtuSuccessCount)
             logMessage("MTU updated to ${mtuResult.mtu}")
+            mtu = mtuResult.mtu
             true
         }
     }
@@ -206,12 +214,12 @@ class BlePerfViewModel(
             val writeResult = bleClient.writeCharacteristic(
                 BleUUID.SERVICE,
                 BleUUID.CHARACTERISTIC_PERF_TEST_WRITE,
-                ByteArray(PERF_TEST_WRITE_DATA_SIZE) { 0 },
+                ByteArray(mtu - 10) { 0 },
                 BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             )
             if (writeResult.isSuccess) {
                 sendAction(BlePerfAction.IncreaseWriteSuccessCount)
-                logMessage("Write data $PERF_TEST_WRITE_DATA_SIZE bytes")
+                logMessage("Write data ${mtu - 10} bytes")
             } else {
                 sendAction(BlePerfAction.IncreaseWriteFailCount)
                 logMessage("Write failed: ${writeResult.errorMessage}", true)
@@ -246,8 +254,9 @@ class BlePerfViewModel(
         private const val TAG = "BlePerfViewModel"
         private const val PERF_TEST_MTU = 480
         private const val PERF_TEST_WRITE_DATA_SIZE = 200
-        private const val READ_WRITE_TIMES = 3
+        private const val READ_WRITE_TIMES = 5
         private const val READ_WRITE_DELAY = 2000L
+        private const val MAX_LOG_SIZE = 1000
     }
 }
 
