@@ -33,8 +33,8 @@ class BlePerfViewModel(
     }
 
     private fun startScan() {
-        logMessage("Starting scan...")
         runAsync {
+            logMessage("Starting scan...")
             val filters = listOf(
                 ScanFilter.Builder()
                     .setServiceUuid(ParcelUuid(BleUUID.SERVICE))
@@ -54,8 +54,8 @@ class BlePerfViewModel(
                     sendAction(BlePerfAction.OnFoundDevice(result.device.address))
                 },
                 onError = { errorCode ->
-                    logMessage("Scan failed with error code: $errorCode", true)
                     bleScanner.stop()
+                    logMessage("Scan failed with error code: $errorCode", true)
                     disconnectAndRestart()
                 }
             )
@@ -66,6 +66,46 @@ class BlePerfViewModel(
         return when (action) {
             is BlePerfAction.LogMessage -> {
                 currentState.copy(log = listOf(action.message) + currentState.log)
+            }
+
+            is BlePerfAction.IncreaseConnectSuccessCount -> {
+                currentState.copy(connectSuccessCount = currentState.connectSuccessCount + 1)
+            }
+
+            is BlePerfAction.IncreaseConnectFailCount -> {
+                currentState.copy(connectFailCount = currentState.connectFailCount + 1)
+            }
+
+            is BlePerfAction.IncreaseDiscoverSuccessCount -> {
+                currentState.copy(discoverSuccessCount = currentState.discoverSuccessCount + 1)
+            }
+
+            is BlePerfAction.IncreaseDiscoverFailCount -> {
+                currentState.copy(discoverFailCount = currentState.discoverFailCount + 1)
+            }
+
+            is BlePerfAction.IncreaseRequestMtuSuccessCount -> {
+                currentState.copy(requestMtuSuccessCount = currentState.requestMtuSuccessCount + 1)
+            }
+
+            is BlePerfAction.IncreaseRequestMtuFailCount -> {
+                currentState.copy(requestMtuFailCount = currentState.requestMtuFailCount + 1)
+            }
+
+            is BlePerfAction.IncreaseReadSuccessCount -> {
+                currentState.copy(readSuccessCount = currentState.readSuccessCount + 1)
+            }
+
+            is BlePerfAction.IncreaseReadFailCount -> {
+                currentState.copy(readFailCount = currentState.readFailCount + 1)
+            }
+
+            is BlePerfAction.IncreaseWriteSuccessCount -> {
+                currentState.copy(writeSuccessCount = currentState.writeSuccessCount + 1)
+            }
+
+            is BlePerfAction.IncreaseWriteFailCount -> {
+                currentState.copy(writeFailCount = currentState.writeFailCount + 1)
             }
 
             else -> currentState
@@ -104,9 +144,11 @@ class BlePerfViewModel(
         logMessage("Connecting to device: $address")
         val connResult = bleClient.connect(address) {}
         return if (!connResult.isSuccess) {
+            sendAction(BlePerfAction.IncreaseConnectFailCount)
             disconnectAndRestart()
             false
         } else {
+            sendAction(BlePerfAction.IncreaseConnectSuccessCount)
             logMessage("Connected to device: $address")
             true
         }
@@ -116,10 +158,12 @@ class BlePerfViewModel(
         logMessage("Discovering services...")
         val discoverResult = bleClient.discoverServices()
         return if (!discoverResult.isSuccess) {
+            sendAction(BlePerfAction.IncreaseDiscoverFailCount)
             logMessage("Failed to discover services: ${discoverResult.errorMessage}", true)
             disconnectAndRestart()
             false
         } else {
+            sendAction(BlePerfAction.IncreaseDiscoverSuccessCount)
             logMessage("Services discovered successfully")
             true
         }
@@ -129,10 +173,12 @@ class BlePerfViewModel(
         logMessage("Requesting MTU $PERF_TEST_MTU ...")
         val mtuResult = bleClient.requestMtu(PERF_TEST_MTU)
         return if (!mtuResult.isSuccess) {
+            sendAction(BlePerfAction.IncreaseRequestMtuFailCount)
             logMessage("Failed to request MTU ${PERF_TEST_MTU}: ${mtuResult.errorMessage}", true)
             disconnectAndRestart()
             false
         } else {
+            sendAction(BlePerfAction.IncreaseRequestMtuSuccessCount)
             logMessage("MTU updated to ${mtuResult.mtu}")
             true
         }
@@ -146,8 +192,10 @@ class BlePerfViewModel(
                 BleUUID.CHARACTERISTIC_PERF_TEST_READ
             )
             if (readResult.isSuccess) {
+                sendAction(BlePerfAction.IncreaseReadSuccessCount)
                 logMessage("Read data: ${readResult.value.size} bytes")
             } else {
+                sendAction(BlePerfAction.IncreaseReadFailCount)
                 logMessage("Read failed: ${readResult.errorMessage}", true)
                 disconnectAndRestart()
                 return
@@ -162,8 +210,10 @@ class BlePerfViewModel(
                 BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             )
             if (writeResult.isSuccess) {
+                sendAction(BlePerfAction.IncreaseWriteSuccessCount)
                 logMessage("Write data $PERF_TEST_WRITE_DATA_SIZE bytes")
             } else {
+                sendAction(BlePerfAction.IncreaseWriteFailCount)
                 logMessage("Write failed: ${writeResult.errorMessage}", true)
                 disconnectAndRestart()
                 return
@@ -212,4 +262,3 @@ class BlePerfViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
-
