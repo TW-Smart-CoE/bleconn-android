@@ -6,6 +6,7 @@ sealed class Screen(val route: String) {
     data object BleServerScreen : Screen("ble_server_screen")
     data object BleScannerScreen : Screen("ble_scanner_screen")
     data object BleClientScreen : Screen("ble_client_screen/{address}")
+    data object BlePerfScreen : Screen("ble_perf_screen")
 
     fun routeWithArgs(vararg args: String): String {
         return buildString {

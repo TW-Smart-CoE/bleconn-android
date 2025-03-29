@@ -13,4 +13,5 @@ sealed interface SelectEvent : Event
 sealed interface SelectAction : Action {
     data object ClickBleServer : SelectAction
     data object ClickBleScanner : SelectAction
+    data object ClickBlePerf : SelectAction
 }

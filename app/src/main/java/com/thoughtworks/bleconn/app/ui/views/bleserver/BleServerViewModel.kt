@@ -87,9 +87,9 @@ class BleServerViewModel(
             if (bleServer.isStarted() || bleAdvertiser.isStarted()) {
                 viewModelScope.launch(ioDispatcher) {
                     Log.d(TAG, "Restarting BLE server and advertiser")
-                    delay(500)
+                    delay(1000)
                     sendAction(BleServerAction.Stop)
-                    delay(500)
+                    delay(1000)
                     sendAction(BleServerAction.Start)
                 }
             }
@@ -212,6 +212,29 @@ class BleServerViewModel(
                     },
                     intervalSeconds = 1,
                 )
+            ),
+            CharacteristicHolder(
+                uuid = BleUUID.CHARACTERISTIC_PERF_TEST_READ,
+                properties = BluetoothGattCharacteristic.PROPERTY_READ,
+                permissions = BluetoothGattCharacteristic.PERMISSION_READ,
+                handleReadWrite = { address, value ->
+                    Log.d(TAG, "Perf read value")
+                    ReadWriteResult(
+                        status = GATT_SUCCESS,
+                        value = ByteArray(PERF_TEST_READ_DATA_SIZE) { 1 },
+                    )
+                }
+            ),
+            CharacteristicHolder(
+                uuid = BleUUID.CHARACTERISTIC_PERF_TEST_WRITE,
+                properties = BluetoothGattCharacteristic.PROPERTY_WRITE,
+                permissions = BluetoothGattCharacteristic.PERMISSION_WRITE,
+                handleReadWrite = { address, value ->
+                    Log.d(TAG, "Perf write value size: ${value.size}")
+                    ReadWriteResult(
+                        status = GATT_SUCCESS,
+                    )
+                }
             )
         )
     }
@@ -276,6 +299,7 @@ class BleServerViewModel(
 
     companion object {
         private const val TAG = "BleServerViewModel"
+        private const val PERF_TEST_READ_DATA_SIZE = 200
     }
 }
 

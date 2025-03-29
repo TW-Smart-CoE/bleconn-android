@@ -41,6 +41,10 @@ class SelectViewModel(
             SelectAction.ClickBleScanner -> {
                 navigator.navigateToBleScannerScreen()
             }
+
+            SelectAction.ClickBlePerf -> {
+                navigator.navigateToBlePerfScreen()
+            }
         }
     }
 }

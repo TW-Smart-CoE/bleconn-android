@@ -28,4 +28,8 @@ class NavigatorImpl(private val navController: NavController) : Navigator {
     override fun navigateToBleClientScreen(address: String) {
         navController.navigate(Screen.BleClientScreen.routeWithArgs(address))
     }
+
+    override fun navigateToBlePerfScreen() {
+        navController.navigate(Screen.BlePerfScreen.route)
+    }
 }

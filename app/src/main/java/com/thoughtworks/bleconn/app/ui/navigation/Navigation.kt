@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.thoughtworks.bleconn.app.di.Dependency
 import com.thoughtworks.bleconn.app.ui.views.bleclient.BleClientScreen
+import com.thoughtworks.bleconn.app.ui.views.bleperf.BlePerfScreen
 import com.thoughtworks.bleconn.app.ui.views.blescanner.BleScannerScreen
 import com.thoughtworks.bleconn.app.ui.views.bleserver.BleServerScreen
 import com.thoughtworks.bleconn.app.ui.views.permission.PermissionRequestScreen
@@ -41,6 +42,9 @@ fun Navigation(dependency: Dependency) {
         composable(route = Screen.BleClientScreen.route) { backStackEntry ->
             val address = backStackEntry.arguments?.getString("address") ?: ""
             BleClientScreen(dependency, address)
+        }
+        composable(route = Screen.BlePerfScreen.route) {
+            BlePerfScreen(dependency)
         }
     }
 }

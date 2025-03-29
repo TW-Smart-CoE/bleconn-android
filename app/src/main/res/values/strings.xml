@@ -17,4 +17,5 @@
     <string name="enable_notification">Enable notification</string>
     <string name="disable_notification">Disable notification</string>
     <string name="discover_services">Discover Services</string>
+    <string name="ble_perf_client">Ble perf client</string>
 </resources>

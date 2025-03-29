@@ -76,6 +76,17 @@ fun SelectScreen(
                     ) {
                         Text(context.getString(R.string.ble_scanner))
                     }
+
+                    Button(
+                        onClick = {
+                            viewModel.sendAction(SelectAction.ClickBlePerf)
+                        },
+                        modifier = Modifier
+                            .padding(top = 16.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(context.getString(R.string.ble_perf_client))
+                    }
                 }
             }
         }

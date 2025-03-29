@@ -6,4 +6,5 @@ interface Navigator {
     fun navigateToBleServerScreen()
     fun navigateToBleScannerScreen()
     fun navigateToBleClientScreen(address: String)
+    fun navigateToBlePerfScreen()
 }
