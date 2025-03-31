@@ -16,8 +16,8 @@ import com.thoughtworks.bleconn.app.foundation.mvi.Store
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 import java.util.LinkedList
+import java.util.Locale
 
 class BlePerfViewModel(
     dependency: Dependency,
@@ -47,6 +47,8 @@ class BlePerfViewModel(
                 .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
                 .build()
 
+            var scanErrorOccurred = false
+
             bleScanner.start(
                 filters = filters,
                 settings = settings,
@@ -57,18 +59,19 @@ class BlePerfViewModel(
                     sendAction(BlePerfAction.IncreaseScanSuccessCount) // New action
                 },
                 onError = { errorCode ->
+                    scanErrorOccurred = true
                     bleScanner.stop()
                     logMessage("Scan failed with error code: $errorCode", true)
-                    sendAction(BlePerfAction.IncreaseScanFailCount) // New action
+                    sendAction(BlePerfAction.IncreaseScanFailCount)
                     disconnectAndRestart()
                 }
             )
 
             delay(SCAN_TIMEOUT)
-            if (bleScanner.isStarted()) {
+            if (!scanErrorOccurred && bleScanner.isStarted()) {
                 logMessage("Scan timeout, no device found", true)
                 bleScanner.stop()
-                sendAction(BlePerfAction.IncreaseScanFailCount) // New action
+                sendAction(BlePerfAction.IncreaseScanFailCount)
                 disconnectAndRestart()
             }
         }
@@ -157,10 +160,13 @@ class BlePerfViewModel(
 
     private fun startTest(address: String) {
         runAsync {
-            if (!connectToDevice(address)) return@runAsync
-            if (!discoverServices()) return@runAsync
-            if (!requestMtu()) return@runAsync
-            performReadWriteTest()
+            if (connectToDevice(address) &&
+                discoverServices() &&
+                requestMtu()
+            ) {
+                performReadWriteTest()
+            }
+
             disconnectAndRestart()
         }
     }
@@ -170,7 +176,6 @@ class BlePerfViewModel(
         val connResult = bleClient.connect(address) {}
         return if (!connResult.isSuccess) {
             sendAction(BlePerfAction.IncreaseConnectFailCount)
-            disconnectAndRestart()
             false
         } else {
             sendAction(BlePerfAction.IncreaseConnectSuccessCount)
@@ -185,7 +190,6 @@ class BlePerfViewModel(
         return if (!discoverResult.isSuccess) {
             sendAction(BlePerfAction.IncreaseDiscoverFailCount)
             logMessage("Failed to discover services: ${discoverResult.errorMessage}", true)
-            disconnectAndRestart()
             false
         } else {
             sendAction(BlePerfAction.IncreaseDiscoverSuccessCount)
@@ -200,7 +204,6 @@ class BlePerfViewModel(
         return if (!mtuResult.isSuccess) {
             sendAction(BlePerfAction.IncreaseRequestMtuFailCount)
             logMessage("Failed to request MTU ${PERF_TEST_MTU}: ${mtuResult.errorMessage}", true)
-            disconnectAndRestart()
             false
         } else {
             sendAction(BlePerfAction.IncreaseRequestMtuSuccessCount)
@@ -223,7 +226,6 @@ class BlePerfViewModel(
             } else {
                 sendAction(BlePerfAction.IncreaseReadFailCount)
                 logMessage("Read failed: ${readResult.errorMessage}", true)
-                disconnectAndRestart()
                 return
             }
 
@@ -241,7 +243,6 @@ class BlePerfViewModel(
             } else {
                 sendAction(BlePerfAction.IncreaseWriteFailCount)
                 logMessage("Write failed: ${writeResult.errorMessage}", true)
-                disconnectAndRestart()
                 return
             }
 
@@ -252,6 +253,7 @@ class BlePerfViewModel(
     }
 
     private fun disconnectAndRestart() {
+        Log.d(TAG, "disconnectAndRestart")
         bleClient.disconnect()
         sendAction(BlePerfAction.RestartProcess)
     }
@@ -289,3 +291,4 @@ class BlePerfViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+
