@@ -25,7 +25,6 @@ class BleScannerViewModel(
             )
         ),
 ) : MVIViewModel<BleScannerState, BleScannerEvent, BleScannerAction>(store) {
-    private val ioDispatcher = dependency.coroutineDispatchers.ioDispatcher
     private val navigator = dependency.navigator
     private val bleScanner = dependency.bleScanner
 
@@ -112,7 +111,7 @@ class BleScannerViewModel(
         }
     }
 
-    private suspend fun bleScannerStart() {
+    private fun bleScannerStart() {
         val filters = listOf(
             ScanFilter.Builder()
                 .setServiceUuid(ParcelUuid(BleUUID.SERVICE))

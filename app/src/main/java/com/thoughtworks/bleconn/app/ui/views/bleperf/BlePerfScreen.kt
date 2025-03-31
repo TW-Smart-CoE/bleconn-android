@@ -145,6 +145,11 @@ fun CardView(state: BlePerfState) {
                 .background(primaryColor)
         ) {
             StatRow(
+                label = "Scan",
+                successCount = state.scanSuccessCount,
+                failCount = state.scanFailCount
+            )
+            StatRow(
                 label = "Connect",
                 successCount = state.connectSuccessCount,
                 failCount = state.connectFailCount
@@ -213,3 +218,4 @@ fun StatRow(label: String, successCount: Int, failCount: Int) {
         )
     }
 }
+

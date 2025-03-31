@@ -18,6 +18,8 @@ data class BlePerfState(
     val readFailCount: Int = 0,
     val writeSuccessCount: Int = 0,
     val writeFailCount: Int = 0,
+    val scanSuccessCount: Int = 0,
+    val scanFailCount: Int = 0,
 ) : State
 
 sealed interface BlePerfEvent : Event {
@@ -40,4 +42,6 @@ sealed interface BlePerfAction : Action {
     data object IncreaseReadFailCount : BlePerfAction
     data object IncreaseWriteSuccessCount : BlePerfAction
     data object IncreaseWriteFailCount : BlePerfAction
+    data object IncreaseScanSuccessCount : BlePerfAction
+    data object IncreaseScanFailCount : BlePerfAction
 }

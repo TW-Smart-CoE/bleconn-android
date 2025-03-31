@@ -54,13 +54,23 @@ class BlePerfViewModel(
                     bleScanner.stop()
                     logMessage("Device found: ${result.device.address}")
                     sendAction(BlePerfAction.OnFoundDevice(result.device.address))
+                    sendAction(BlePerfAction.IncreaseScanSuccessCount) // New action
                 },
                 onError = { errorCode ->
                     bleScanner.stop()
                     logMessage("Scan failed with error code: $errorCode", true)
+                    sendAction(BlePerfAction.IncreaseScanFailCount) // New action
                     disconnectAndRestart()
                 }
             )
+
+            delay(SCAN_TIMEOUT)
+            if (bleScanner.isStarted()) {
+                logMessage("Scan timeout, no device found", true)
+                bleScanner.stop()
+                sendAction(BlePerfAction.IncreaseScanFailCount) // New action
+                disconnectAndRestart()
+            }
         }
     }
 
@@ -113,6 +123,14 @@ class BlePerfViewModel(
 
             is BlePerfAction.IncreaseWriteFailCount -> {
                 currentState.copy(writeFailCount = currentState.writeFailCount + 1)
+            }
+
+            is BlePerfAction.IncreaseScanSuccessCount -> {
+                currentState.copy(scanSuccessCount = currentState.scanSuccessCount + 1)
+            }
+
+            is BlePerfAction.IncreaseScanFailCount -> {
+                currentState.copy(scanFailCount = currentState.scanFailCount + 1)
             }
 
             else -> currentState
@@ -253,10 +271,10 @@ class BlePerfViewModel(
     companion object {
         private const val TAG = "BlePerfViewModel"
         private const val PERF_TEST_MTU = 480
-        private const val PERF_TEST_WRITE_DATA_SIZE = 200
         private const val READ_WRITE_TIMES = 5
         private const val READ_WRITE_DELAY = 2000L
         private const val MAX_LOG_SIZE = 1000
+        private const val SCAN_TIMEOUT = 30000L // 30 seconds
     }
 }
 
