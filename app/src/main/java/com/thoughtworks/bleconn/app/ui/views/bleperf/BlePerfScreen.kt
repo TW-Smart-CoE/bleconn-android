@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -107,7 +105,8 @@ fun BlePerfScreen(dependency: Dependency) {
         if (state.value.log.isNotEmpty()) {
             val lastIndex = state.value.log.size - 1
             val fifthLastIndex = (lastIndex - 5).coerceAtLeast(0)
-            val fifthLastItemVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == fifthLastIndex }
+            val fifthLastItemVisible =
+                listState.layoutInfo.visibleItemsInfo.any { it.index == fifthLastIndex }
             if (fifthLastItemVisible) {
                 listState.animateScrollToItem(lastIndex)
             }
