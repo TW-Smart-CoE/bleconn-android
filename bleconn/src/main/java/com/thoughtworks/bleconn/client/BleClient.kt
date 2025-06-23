@@ -29,6 +29,7 @@ import java.util.TimerTask
 import java.util.UUID
 import kotlin.coroutines.suspendCoroutine
 
+@SuppressLint("DeprecatedSdkApi")
 class BleClient(
     private val context: Context,
     private val logger: Logger = DefaultLogger(),
@@ -107,6 +108,7 @@ class BleClient(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
         ) {
+            @Suppress("DEPRECATION")
             handleOnCharacteristicChanged(characteristic, characteristic.value)
         }
 
@@ -125,6 +127,7 @@ class BleClient(
             characteristic: BluetoothGattCharacteristic,
             status: Int,
         ) {
+            @Suppress("DEPRECATION")
             handleOnCharacteristicRead(status, characteristic, characteristic.value)
         }
 

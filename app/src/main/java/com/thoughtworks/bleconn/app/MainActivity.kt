@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             BleconnandroidTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Navigation(dependency)
+                    Navigation(dependency, innerPadding)
                 }
             }
         }

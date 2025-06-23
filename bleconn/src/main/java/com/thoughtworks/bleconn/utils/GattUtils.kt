@@ -1,5 +1,6 @@
 package com.thoughtworks.bleconn.utils
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
@@ -9,6 +10,7 @@ import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
 import androidx.annotation.RequiresPermission
 
+@SuppressLint("DeprecatedSdkApi")
 object GattUtils {
     @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
     fun BluetoothGatt.writeCharacteristicCompact(
@@ -23,8 +25,10 @@ object GattUtils {
                 writeType
             ) == BluetoothStatusCodes.SUCCESS
         } else {
+            @Suppress("DEPRECATION")
             characteristic.value = value
             characteristic.writeType = writeType
+            @Suppress("DEPRECATION")
             return writeCharacteristic(characteristic)
         }
     }
@@ -37,7 +41,9 @@ object GattUtils {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return writeDescriptor(descriptor, value) == BluetoothStatusCodes.SUCCESS
         } else {
+            @Suppress("DEPRECATION")
             descriptor.value = value
+            @Suppress("DEPRECATION")
             return writeDescriptor(descriptor)
         }
     }
@@ -57,7 +63,9 @@ object GattUtils {
                 value,
             ) == BluetoothStatusCodes.SUCCESS
         } else {
+            @Suppress("DEPRECATION")
             characteristic.value = value
+            @Suppress("DEPRECATION")
             notifyCharacteristicChanged(device, characteristic, confirm)
         }
     }
@@ -90,4 +98,3 @@ object GattUtils {
         return propertyList.joinToString(separator = " ")
     }
 }
-

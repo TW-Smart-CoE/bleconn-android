@@ -1,6 +1,7 @@
 package com.thoughtworks.bleconn.app.ui.navigation
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,7 +18,7 @@ import com.thoughtworks.bleconn.utils.navigator.NavigatorImpl
 
 @SuppressLint("InlinedApi")
 @Composable
-fun Navigation(dependency: Dependency) {
+fun Navigation(dependency: Dependency, innerPadding: PaddingValues) {
     val navController = rememberNavController()
     dependency.setNavigator(NavigatorImpl(navController))
 
