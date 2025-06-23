@@ -3,6 +3,7 @@ package com.thoughtworks.bleconn.app.ui.views.blescanner
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -119,9 +120,16 @@ class BleScannerViewModel(
                 .build()
         )
 
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
-            .build()
+        val settings = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+                .setLegacy(false)
+                .build()
+        } else {
+            ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+                .build()
+        }
 
         bleScanner.start(
             filters,

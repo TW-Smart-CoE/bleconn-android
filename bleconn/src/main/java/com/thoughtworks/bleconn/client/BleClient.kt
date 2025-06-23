@@ -382,7 +382,7 @@ class BleClient(
 
     @SuppressLint("MissingPermission")
     private fun connectDevice(device: BluetoothDevice): Boolean {
-        bluetoothGatt = device.connectGatt(context, false, gattCallback)
+        bluetoothGatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         return bluetoothGatt != null
     }
 
