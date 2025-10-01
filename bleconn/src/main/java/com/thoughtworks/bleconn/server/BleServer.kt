@@ -271,6 +271,10 @@ class BleServer(
         return gattServer != null
     }
 
+    fun isConnected(): Boolean {
+        return gattServer?.connectedDevices?.isNotEmpty() ?: false
+    }
+
     @SuppressLint("MissingPermission")
     fun start(serviceHolders: List<ServiceHolder>): Boolean {
         if (!bluetoothManager.adapter.isEnabled) {
