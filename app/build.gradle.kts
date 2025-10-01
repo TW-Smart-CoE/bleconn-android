@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.thoughtworks.bleconn.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.thoughtworks.bleconn.app"
