@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
 import com.thoughtworks.bleconn.definitions.DescriptorUUID
 import com.thoughtworks.bleconn.utils.CallbackHolder
@@ -20,6 +21,7 @@ import com.thoughtworks.bleconn.utils.logger.DefaultLogger
 import com.thoughtworks.bleconn.utils.logger.Logger
 import com.thoughtworks.bleconn.utils.logger.debug
 import com.thoughtworks.bleconn.utils.logger.error
+import com.thoughtworks.bleconn.utils.logger.warn
 import com.thoughtworks.bleconn.utils.silentResume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +43,12 @@ class BleClient(
     private val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
     private var bluetoothGatt: BluetoothGatt? = null
 
+    // Address of the device whose connection is in flight (i.e. connectGatt
+    // has been called but onConnectionStateChange(STATE_CONNECTED) has not
+    // arrived yet). Used to support reentrant connect() calls without leaking
+    // GATT handles or starving the peer's link slots.
+    private var pendingConnectAddress: String? = null
+
     private var onConnectStateChanged: ((Boolean) -> Unit)? = null
     private val connectCallback = CallbackHolder<Result>(connectTimeout)
     private val discoverServicesCallback = CallbackHolder<DiscoverServicesResult>(requestTimeout)
@@ -56,15 +64,45 @@ class BleClient(
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            onConnectStateChanged?.invoke(newState == BluetoothGatt.STATE_CONNECTED)
+            // Stale-gatt guard: if this callback is from a GATT instance that
+            // has already been superseded (rapid re-tap → new connectGatt was
+            // issued before the previous one fully finished), close it
+            // silently and do NOT fire any user-facing callbacks. Without
+            // this guard, the previous gatt's STATE_DISCONNECTED would
+            // incorrectly mark the new connection as disconnected, and its
+            // STATE_CONNECTED would falsely complete the new connect.
+            if (gatt !== bluetoothGatt) {
+                logger.warn(
+                    TAG,
+                    "onConnectionStateChange from stale gatt for ${gatt.device.address} " +
+                        "(status=$status, newState=$newState); closing"
+                )
+                try {
+                    gatt.disconnect()
+                } catch (_: Throwable) {
+                }
+                try {
+                    gatt.close()
+                } catch (_: Throwable) {
+                }
+                return
+            }
+
             if (newState == BluetoothGatt.STATE_CONNECTED) {
                 logger.debug(TAG, "Connected to GATT server.")
+                pendingConnectAddress = null
+                onConnectStateChanged?.invoke(true)
                 connectCallback.resolve(Result(isSuccess = true))
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
-                val errorMessage = "Disconnected from GATT server."
+                val errorMessage = "Disconnected from GATT server. (status=$status)"
                 logger.debug(TAG, errorMessage)
+                pendingConnectAddress = null
                 stopCallbackCheckLoop()
-                connectCallback.resolve(Result(errorMessage = errorMessage))
+                onConnectStateChanged?.invoke(false)
+                // Resolve every pending request — read/write/discover/mtu would
+                // otherwise hang until their individual timeouts fire (mirrors
+                // the iOS fix for the same class of bug).
+                clearPendingCallbacks(errorMessage)
             }
         }
 
@@ -316,8 +354,21 @@ class BleClient(
         }
     }
 
-    fun isConnected(): Boolean {
-        return bluetoothGatt != null
+    /**
+     * Synchronous check for whether the given peripheral is currently connected.
+     *
+     * Verifies BOTH the local GATT handle AND the system-level connection state,
+     * so a device that silently dropped (signal lost, peer reset, etc.) without
+     * an `onConnectionStateChange` callback yet is correctly reported as
+     * disconnected.
+     */
+    @SuppressLint("MissingPermission")
+    fun isConnected(address: String): Boolean {
+        if (address.isBlank()) return false
+        val gatt = bluetoothGatt ?: return false
+        if (!gatt.device.address.equals(address, ignoreCase = true)) return false
+        return bluetoothManager.getConnectionState(gatt.device, BluetoothProfile.GATT) ==
+            BluetoothProfile.STATE_CONNECTED
     }
 
     suspend fun connect(
@@ -333,6 +384,7 @@ class BleClient(
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun connect(
         deviceAddress: String,
         onConnectStateChanged: ((Boolean) -> Unit)?,
@@ -345,18 +397,65 @@ class BleClient(
             return false
         }
 
-        if (connectCallback.isSet()) {
-            val errorMessage = "Another connection is in progress."
-            logger.error(TAG, errorMessage)
-            callback(Result(errorMessage = errorMessage))
-            return false
-        }
-
         if (!BluetoothAdapter.checkBluetoothAddress(deviceAddress)) {
             val errorMessage = "Invalid device address. $deviceAddress"
             logger.error(TAG, errorMessage)
             callback(Result(errorMessage = errorMessage))
             return false
+        }
+
+        // Reentrancy protection — addresses "rapid repeated tap freezes BLE
+        // until the app is force-killed" (peer's GATT link slots get
+        // exhausted by leaked GATT handles).
+        //
+        // Three cases we must distinguish before issuing connectGatt:
+        //   (a) Same device already fully connected → idempotent success.
+        //   (b) Same device connect already in flight → merge: replace the
+        //       pending callback, do NOT start a second connectGatt (which
+        //       would silently leak the previous GATT handle and saturate
+        //       the peer's connection budget).
+        //   (c) Different device connected / connecting → tear the old one
+        //       down (disconnect + close), THEN start fresh.
+
+        val gatt = bluetoothGatt
+        if (gatt != null && gatt.device.address.equals(deviceAddress, ignoreCase = true)) {
+            val state = bluetoothManager.getConnectionState(gatt.device, BluetoothProfile.GATT)
+            if (state == BluetoothProfile.STATE_CONNECTED) {
+                // (a) Already connected to the same device — idempotent success.
+                logger.debug(TAG, "connect: $deviceAddress already connected, returning success")
+                this.onConnectStateChanged = onConnectStateChanged
+                callback(Result(isSuccess = true))
+                return true
+            }
+        }
+
+        if (pendingConnectAddress != null &&
+            pendingConnectAddress.equals(deviceAddress, ignoreCase = true)
+        ) {
+            // (b) Same-device connect already in progress — merge.
+            logger.debug(TAG, "connect: merging duplicate connect to $deviceAddress in progress")
+            this.onConnectStateChanged = onConnectStateChanged
+            // Replace the pending callback so only the latest caller is
+            // notified. The previous caller's callback is silently dropped —
+            // they were calling for the same outcome anyway.
+            connectCallback.set(callback)
+            return true
+        }
+
+        if (bluetoothGatt != null || pendingConnectAddress != null) {
+            // (c) A different device is connected or connecting — tear down
+            //     before issuing a new connect. Without this we leak the
+            //     previous GATT handle and risk exhausting the peer's link
+            //     slots (the classic "must kill the app to reconnect" path).
+            val supersededAddr = pendingConnectAddress ?: bluetoothGatt?.device?.address
+            logger.debug(
+                TAG,
+                "connect: superseding existing connection ($supersededAddr) for new target $deviceAddress"
+            )
+            closeGattQuietly()
+            clearPendingCallbacks("Superseded by new connect to $deviceAddress")
+            pendingConnectAddress = null
+            stopCallbackCheckLoop()
         }
 
         val device = try {
@@ -376,6 +475,7 @@ class BleClient(
         if (!result) {
             val errorMessage = "Failed to connect to GATT server."
             logger.error(TAG, errorMessage)
+            pendingConnectAddress = null
             connectCallback.resolve(Result(errorMessage = errorMessage))
             return false
         }
@@ -385,26 +485,49 @@ class BleClient(
 
     @SuppressLint("MissingPermission")
     private fun connectDevice(device: BluetoothDevice): Boolean {
+        // Defensive close — connect() should have already cleared this, but
+        // belt-and-suspenders to absolutely guarantee no GATT handle leak.
+        closeGattQuietly()
+        pendingConnectAddress = device.address
         bluetoothGatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         return bluetoothGatt != null
     }
 
     @SuppressLint("MissingPermission")
     fun disconnect() {
-        bluetoothGatt?.apply {
-            disconnect()
-            close()
-            clearCallbacks()
-        }
-        bluetoothGatt = null
+        closeGattQuietly()
+        clearPendingCallbacks("Manually disconnected GATT")
+        pendingConnectAddress = null
         onConnectStateChanged = null
         logger.debug(TAG, "Disconnected from GATT server.")
         stopCallbackCheckLoop()
     }
 
-    private fun clearCallbacks() {
-        val errorMessage = "Manually disconnected GATT"
+    /**
+     * Force-close the current GATT handle without firing user-facing callbacks.
+     *
+     * MUST be called before issuing a new `connectGatt(...)` — Android does
+     * NOT auto-close the previous GATT instance. Without this, every
+     * reentrant connect leaks one GATT handle, and the peer (e.g. ESP32)
+     * runs out of link slots after a few rapid taps, leading to the
+     * "must kill the app to reconnect" symptom.
+     */
+    @SuppressLint("MissingPermission")
+    private fun closeGattQuietly() {
+        bluetoothGatt?.apply {
+            try {
+                disconnect()
+            } catch (_: Throwable) {
+            }
+            try {
+                close()
+            } catch (_: Throwable) {
+            }
+        }
+        bluetoothGatt = null
+    }
 
+    private fun clearPendingCallbacks(errorMessage: String) {
         readCallback.resolve(
             ReadResult(
                 isSuccess = false,
